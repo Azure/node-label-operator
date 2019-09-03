@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: tag-label-sync
+    namespace: default
+data:
+    labelPrefix: "azure.tags"
+    conflictPolicy: "ignore"
+    syncDirection: "two-way"
+    interval: "2" 
+    resourceGroup: "shoshanargwestus2"

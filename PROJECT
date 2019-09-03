@@ -1,0 +1,3 @@
+version: "2"
+domain: node-label-operator.io
+repo: node-label-operator
