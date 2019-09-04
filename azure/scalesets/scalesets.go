@@ -18,6 +18,15 @@ func (o *Spec) Spec() *compute.VirtualMachineScaleSet {
 	return o.internal
 }
 
+func (o Spec) Name() string {
+	return *o.internal.Name
+}
+
+// is this rep exposure? :o
+func (o Spec) Tags() map[string]*string {
+	return o.internal.Tags
+}
+
 func Name(name string) SpecOption {
 	return func(o *Spec) *Spec {
 		o.internal.Name = &name

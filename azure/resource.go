@@ -17,5 +17,6 @@ type Client interface {
 }
 
 type Spec interface {
-	// what goes here?
+	Name() string
+	Tags() map[string]*string
 }

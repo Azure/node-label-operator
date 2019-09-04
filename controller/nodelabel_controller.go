@@ -36,9 +36,7 @@ type ReconcileNodeLabel struct {
 // I define new functions?
 // I may still need to make some functions easier to test.
 type ComputeResource interface {
-	// how can I make an interface for Spec that allows me to use VM and VMSS with the same function?
-	// how am I supposed to do this when different clients are returned?
-	// Get(ctx context.Context, name string) error // return type Spec?
+	Get(ctx context.Context, name string) (azure.Spec, error) // return type Spec?
 	Update(ctx context.Context) error
 	Tags() map[string]*string
 	SetTag(name string, value *string)
@@ -61,13 +59,12 @@ func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName stri
 	return VirtualMachine{client: client, vm: vm}, nil
 }
 
-func (m VirtualMachine) Get(ctx context.Context, name string) error {
-	var err error
-	m.vm, err = m.client.Get(ctx, name)
+func (m VirtualMachine) Get(ctx context.Context, name string) (azure.Spec, error) {
+	vm, err := m.client.Get(ctx, name)
 	if err != nil {
-		return err
+		return *vm, err
 	}
-	return nil
+	return *vm, nil
 }
 
 func (m VirtualMachine) Update(ctx context.Context) error {
@@ -107,13 +104,12 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 }
 
 // find a way to actually use get?? can I make a spec interface and have everything implement Spec() or something?
-func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) error {
+func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (azure.Spec, error) {
 	vmss, err := m.client.Get(ctx, name)
 	if err != nil {
-		return err
+		return *vmss, err
 	}
-	m.vmss = vmss
-	return nil
+	return *vmss, nil
 }
 
 // does this work the wayw it's supposed to?

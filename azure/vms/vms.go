@@ -13,8 +13,16 @@ type Spec struct {
 	internal *compute.VirtualMachine
 }
 
-func (spec *Spec) Spec() *compute.VirtualMachine {
-	return spec.internal
+func (o *Spec) Spec() *compute.VirtualMachine {
+	return o.internal
+}
+
+func (o Spec) Name() string {
+	return *o.internal.Name
+}
+
+func (o Spec) Tags() map[string]*string {
+	return o.internal.Tags
 }
 
 func defaultSpec() *Spec {
