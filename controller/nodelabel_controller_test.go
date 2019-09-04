@@ -6,6 +6,10 @@ import (
 	"testing"
 )
 
+// just needs to implement functions??
+type fakeNodeLabelReconciler struct {
+}
+
 type fakeComputeResource struct {
 	tags map[string]*string
 }
@@ -121,5 +125,26 @@ func TestConvertLabelValToValidTagVal(t *testing.T) {
 				t.Errorf("given label name %q, got tag name %q, expected tag name %q", tt.given, validTagVal, tt.expected)
 			}
 		})
+	}
+}
+
+// I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
+// ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
+func TestCorrectTagsAppliedToNodes(t *testing.T) {
+}
+
+func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
+	var nodeLabelsTest = []struct {
+		labels       map[string]string
+		tags         map[string]*string
+		expectedTags map[string]*string
+	}{
+		{nil, nil, nil},
+	}
+
+	// create a fake ComputeResource and fake Node for each test and use those I guess
+	for _, tt := range nodeLabelsTest {
+		// do stuff
+		fmt.Println(tt)
 	}
 }
