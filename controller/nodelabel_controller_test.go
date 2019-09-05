@@ -220,7 +220,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 
 			// I think r.Update() is causing issues still since I can't actually update...
 			// try/catch sort of thing in case the error is from trying to update?
-			err = r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
+			_, err = r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
 			if err != nil {
 				t.Errorf("failed to apply tags to nodes: %q", err)
 			}
@@ -261,13 +261,15 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
 
-			err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
+			_, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
 			if err != nil {
 				t.Errorf("failed to apply labels to azure resources: %q", err)
 			}
 
 			for k, vptr := range tt.expectedTags {
+				// why is it always broccoli???
 				valptr, ok := computeResource.Tags()[k]
+				fmt.Println(k, *vptr, *valptr)
 				assert.True(t, ok)
 				v := *vptr
 				val := *valptr

@@ -191,12 +191,22 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 		return err
 	}
 
-	if err := r.applyTagsToNodes(namespacedName, vmss, node, configOptions); err != nil {
+	updatedNode, err := r.applyTagsToNodes(namespacedName, vmss, node, configOptions)
+	if err != nil {
+		return err
+	}
+	if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
 		return err
 	}
 
 	// assign all labels on Node to VMSS, if not already there
-	if err := r.applyLabelsToAzureResource(namespacedName, vmss, node, configOptions); err != nil {
+	updatedVMSS, err := r.applyLabelsToAzureResource(namespacedName, vmss, node, configOptions)
+	if err != nil {
+		return err
+	}
+	if err = updatedVMSS.Update(r.ctx); err != nil {
+		// log.Error(err, "failed to update VMSS", "labelName", validTagName, "labelVal", labelVal)
+		// log.Error(err, "failed to update VMSS")
 		return err
 	}
 
@@ -210,19 +220,28 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 		return err
 	}
 
-	if err := r.applyTagsToNodes(namespacedName, vm, node, configOptions); err != nil {
+	updatedNode, err := r.applyTagsToNodes(namespacedName, vm, node, configOptions)
+	if err != nil {
+		return err
+	}
+	if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
 		return err
 	}
 
-	if err := r.applyLabelsToAzureResource(namespacedName, vm, node, configOptions); err != nil {
+	updatedVM, err := r.applyLabelsToAzureResource(namespacedName, vm, node, configOptions)
+	if err != nil {
 		return err
 	}
+	if err = updatedVM.Update(r.ctx); err != nil {
+		return err
+	}
+
 	return nil
 }
 
 // problem with faking is r.Update() and r.Recorder
 // maybe return bool for updating?
-func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) error {
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (*corev1.Node, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
@@ -236,19 +255,12 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 				log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
 
 				node.Labels[validLabelName] = *tagVal
-				if err := r.Update(r.ctx, node); err != nil { // should this be a patch?
-					return err
-				}
 			} else if labelVal != *tagVal {
 				log.V(0).Info("updating", "using policy", configOptions.ConflictPolicy)
 				switch configOptions.ConflictPolicy {
 				case ARMPrecedence:
 					// set label anyway
 					node.Labels[validLabelName] = *tagVal
-					// do I add something here to only make it run if not a test??
-					if err := r.Update(r.ctx, node); err != nil {
-						return err
-					}
 				case NodePrecedence:
 					// do nothing
 					log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
@@ -258,16 +270,16 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 						fmt.Sprintf("ARM tag was not applied to node because a different value for '%s' already exists (%s != %s).", tagName, *tagVal, labelVal))
 					log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
 				default:
-					return errors.New("unrecognized conflict policy")
+					return node, errors.New("unrecognized conflict policy")
 				}
 			}
 		}
 	}
-	return nil
+	return node, nil
 }
 
 // I need to make sure I can get update to work with ComputeResource interface! value vs reference issue
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) error {
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (ComputeResource, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
@@ -275,7 +287,7 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 		if len(computeResource.Tags()) > maxNumTags {
 			// error
 			log.V(1).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
-			return nil
+			return computeResource, nil
 		}
 		for labelName, labelVal := range node.Labels {
 			if !ValidTagName(labelName, configOptions) {
@@ -314,12 +326,12 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 						fmt.Sprintf("node label was not applied to VMSS because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
 					log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
 				default:
-					return errors.New("unrecognized conflict policy")
+					return computeResource, errors.New("unrecognized conflict policy")
 				}
 			}
 		}
 	}
-	return nil
+	return computeResource, nil
 }
 
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
