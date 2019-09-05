@@ -113,7 +113,7 @@ func validLabelName(tagName string) bool {
 	if len(tagName) > maxTagNameLen {
 		return false
 	}
-	re := regexp.MustCompile("^[a-zA-Z0-9_-.]*$")
+	re := regexp.MustCompile("^[a-zA-Z0-9_.-]*$")
 	if !re.MatchString(tagName) {
 		return false
 	}

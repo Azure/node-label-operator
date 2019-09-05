@@ -85,8 +85,6 @@ type VirtualMachineScaleSet struct {
 }
 
 // I'm not sure this is actually modifying the client :(
-// maybe I can make this not a receiver method... and the others can be receiver methods? but then
-// I can't pass as parameter easily...
 func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachineScaleSet, error) {
 	client, err := scalesets.NewClient(subscriptionID, resourceGroup)
 	if err != nil {
@@ -100,7 +98,7 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 	return VirtualMachineScaleSet{client: client, vmss: vmss}, nil
 }
 
-// find a way to actually use get?? can I make a spec interface and have everything implement Spec() or something?
+// find a way to actually use get??
 func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (azure.Spec, error) {
 	vmss, err := m.client.Get(ctx, name)
 	if err != nil {
@@ -131,14 +129,13 @@ func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
 // +kubebuilder:rbac:groups=core,resources=nodes/status,verbs=get
 
 func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result, error) {
-	ctx := context.Background()
+	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
-	r.ctx = ctx
 
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
 	optionsNamespacedName := types.NamespacedName{Name: "node-label-operator", Namespace: "default"} // is this okay
-	if err := r.Get(ctx, optionsNamespacedName, &configMap); err != nil {
+	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
 		// should I allow this to continue? It would be unfortunate to have things sync and then clean it up
 		configOptions = DefaultConfigOptions()
@@ -151,7 +148,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	}
 
 	var node corev1.Node
-	if err := r.Get(ctx, req.NamespacedName, &node); err != nil {
+	if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
 		log.Error(err, "unable to fetch Node")
 		return ctrl.Result{}, err // what should I return here?
 	}
@@ -239,7 +236,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	return nil
 }
 
-// problem with faking is r.Update() and r.Recorder
+// is it a problem that I have r.Recorder and I'm trying to unit test this with sorta fake reconciler?
 // maybe return bool for updating?
 func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (*corev1.Node, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
@@ -247,19 +244,23 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
 		for tagName, tagVal := range computeResource.Tags() {
+			if !ValidLabelName(tagName) {
+				log.V(0).Info("invalid label name", "tag name", tagName)
+				continue
+			}
 			// what if key exists but different value? what takes priority? currently just going to ignore and only add tags that don't exist
 			validLabelName := ConvertTagNameToValidLabelName(tagName, configOptions)
 			labelVal, ok := node.Labels[validLabelName]
 			if !ok {
 				// add tag as label
 				log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
-
 				node.Labels[validLabelName] = *tagVal
 			} else if labelVal != *tagVal {
 				log.V(0).Info("updating", "using policy", configOptions.ConflictPolicy)
 				switch configOptions.ConflictPolicy {
 				case ARMPrecedence:
 					// set label anyway
+					log.V(1).Info("overriding existing node label with ARM tag", "tagName", tagName, "tagVal", tagVal)
 					node.Labels[validLabelName] = *tagVal
 				case NodePrecedence:
 					// do nothing
@@ -291,8 +292,6 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 		}
 		for labelName, labelVal := range node.Labels {
 			if !ValidTagName(labelName, configOptions) {
-				// I don't think I want to return yet
-				// return errors.New(fmt.Sprintf("invalid tag name: %s", labelName))
 				// log.Error(errors.New(fmt.Sprintf("invalid tag name")), fmt.Sprintf("label name: %s", labelName))
 				log.V(0).Info("invalid tag name", "label name", labelName)
 				continue
@@ -301,29 +300,22 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 			tagVal, ok := computeResource.Tags()[validTagName]
 			if !ok {
 				// add label as tag
-				log.V(1).Info("applying labels to VMSS", "labelName", labelName, "labelVal", labelVal)
-
+				log.V(1).Info("applying labels to Azure resource", "labelName", labelName, "labelVal", labelVal)
+				// is  this causing the problem in my unit tests?
 				computeResource.SetTag(validTagName, &labelVal)
-				if err := computeResource.Update(r.ctx); err != nil {
-					// log.Error(err, "failed to update VMSS", "labelName", validTagName, "labelVal", labelVal)
-					log.Error(err, "failed to update VMSS", "labelName", labelName, "labelVal", labelVal)
-				}
 			} else if *tagVal != labelVal {
 				switch configOptions.ConflictPolicy {
 				case NodePrecedence:
 					// set tag anyway
+					log.V(1).Info("overriding existing ARM tag with node label", "labelName", labelName, "labelVal", labelVal)
 					computeResource.SetTag(validTagName, &labelVal)
-					if err := computeResource.Update(r.ctx); err != nil {
-						// log.Error(err, "failed to update VMSS", "labelName", validTagName, "labelVal", labelVal)
-						log.Error(err, "failed to update VMSS", "labelName", labelName, "labelVal", labelVal)
-					}
 				case ARMPrecedence:
 					// do nothing
 					log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
 				case Ignore:
 					// raise kubernetes event
 					r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
-						fmt.Sprintf("node label was not applied to VMSS because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
+						fmt.Sprintf("node label was not applied to Azure resource because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
 					log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
 				default:
 					return computeResource, errors.New("unrecognized conflict policy")

@@ -7,7 +7,6 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/fake"
@@ -17,12 +16,6 @@ import (
 
 	"node-label-operator.io/azure"
 )
-
-// // just needs to implement functions??
-// type fakeNodeLabelReconciler struct{}
-
-// // does the original have a pointer receiver or value receiver?
-// func (r fakeNodeLabelReconciler) Update() {}
 
 type fakeSpec struct{}
 
@@ -36,6 +29,10 @@ func (s fakeSpec) Tags() map[string]*string {
 
 type fakeComputeResource struct {
 	tags map[string]*string
+}
+
+func NewFakeComputeResource() fakeComputeResource {
+	return fakeComputeResource{tags: map[string]*string{}}
 }
 
 func (c fakeComputeResource) Get(ctx context.Context, name string) (azure.Spec, error) {
@@ -94,6 +91,26 @@ Time out o' mind the fairies' coachmakers. `, false},
 	}
 }
 
+func TestValidLabelName(t *testing.T) {
+	var labelNameTests = []struct {
+		given    string
+		expected bool
+	}{
+		{"os", true},
+		{"_favfruit", false},
+		{"favorite_vegetable!!!!", false},
+	}
+
+	for _, tt := range labelNameTests {
+		t.Run(tt.given, func(t *testing.T) {
+			valid := ValidLabelName(tt.given)
+			if valid != tt.expected {
+				t.Errorf("given label name %q, got valid=%t, want valid=%t", tt.given, valid, tt.expected)
+			}
+		})
+	}
+}
+
 func TestConvertTagNameToValidLabelName(t *testing.T) {
 	var tagNameConversionTests = []struct {
 		given    string
@@ -121,7 +138,7 @@ func TestConvertLabelNameToValidTagName(t *testing.T) {
 		given    string
 		expected string
 	}{
-		{"favfruit", "favfruit"},
+		{"favfruit", "favfruit"}, // have prefix?
 	}
 
 	config := DefaultConfigOptions()
@@ -186,14 +203,15 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			"node1",
 			map[string]*string{"env": &vals[0], "dept": &vals[1]},
 			map[string]string{},
-			map[string]string{"azure.tags/env": vals[0], "azure.tags/dept": vals[1]},
+			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
 		},
 	}
 
 	config := DefaultConfigOptions() // tag-to-node only
 
-	k8sClient := newTestK8sClient()
-	nodes := k8sClient.CoreV1().Nodes()
+	// k8sClient := newTestK8sClient()
+	// nodes := k8sClient.CoreV1().Nodes()
+
 	// _, err := nodes.Create(newTestNode(name, nil))
 	// if err != nil {
 	// 	t.Errorf("creating fake node failed: %q", err)
@@ -201,26 +219,17 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	// node := nodes.Get("testNode", metav1.GetOptions{})
 
 	r := defaultNodeLabelReconciler()
-	computeResource := fakeComputeResource{}
+	computeResource := NewFakeComputeResource()
 
 	for _, tt := range armTagsTest {
 		// do stuff
 		t.Run(tt.name, func(t *testing.T) {
 			computeResource.tags = tt.tags
-			// node := newTestNode(tt.name, tt.labels)
-
-			_, err := nodes.Create(newTestNode(tt.name, tt.labels))
-			if err != nil {
-				t.Errorf("creating fake node failed: %q", err)
-			}
-			node, err := nodes.Get(tt.name, metav1.GetOptions{})
-			if err != nil {
-				t.Errorf("failed to get node: %q", err)
-			}
+			node := newTestNode(tt.name, tt.labels)
 
 			// I think r.Update() is causing issues still since I can't actually update...
 			// try/catch sort of thing in case the error is from trying to update?
-			_, err = r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
+			_, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
 			if err != nil {
 				t.Errorf("failed to apply tags to nodes: %q", err)
 			}
@@ -252,13 +261,17 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 
 	config := DefaultConfigOptions()
 	config.SyncDirection = NodeToARM
+	config.ConflictPolicy = NodePrecedence
 	r := defaultNodeLabelReconciler()
-	computeResource := fakeComputeResource{}
+	computeResource := NewFakeComputeResource()
 
 	// create a fake ComputeResource and fake Node for each test and use those I guess
 	for _, tt := range nodeLabelsTest {
 		t.Run(tt.name, func(t *testing.T) {
-			computeResource.tags = tt.tags
+			// computeResource.tags = tt.tags // is something weird going on here?
+			for k, v := range tt.tags {
+				computeResource.tags[k] = v
+			}
 			node := newTestNode(tt.name, tt.labels)
 
 			_, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
@@ -269,12 +282,13 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 			for k, vptr := range tt.expectedTags {
 				// why is it always broccoli???
 				valptr, ok := computeResource.Tags()[k]
-				fmt.Println(k, *vptr, *valptr)
 				assert.True(t, ok)
+				fmt.Println(k, *vptr, *valptr)
 				v := *vptr
 				val := *valptr
 				assert.Equal(t, v, val)
 			}
+
 		})
 	}
 }
