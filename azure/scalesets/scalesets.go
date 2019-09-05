@@ -48,7 +48,7 @@ func Prefix(namePrefix string) SpecOption {
 	}
 }
 
-func defaultSpec() *Spec {
+func DefaultSpec() *Spec {
 	return &Spec{&compute.VirtualMachineScaleSet{
 		Sku: &compute.Sku{},
 		Identity: &compute.VirtualMachineScaleSetIdentity{

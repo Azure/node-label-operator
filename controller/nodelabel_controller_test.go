@@ -4,25 +4,53 @@ import (
 	"context"
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
+	"k8s.io/client-go/kubernetes/scheme"
+	ctrl "sigs.k8s.io/controller-runtime"
+	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"node-label-operator.io/azure"
 )
 
-// just needs to implement functions??
-type fakeNodeLabelReconciler struct {
+// // just needs to implement functions??
+// type fakeNodeLabelReconciler struct{}
+
+// // does the original have a pointer receiver or value receiver?
+// func (r fakeNodeLabelReconciler) Update() {}
+
+type fakeSpec struct{}
+
+func (s fakeSpec) Name() string {
+	return ""
+}
+
+func (s fakeSpec) Tags() map[string]*string {
+	return nil
 }
 
 type fakeComputeResource struct {
 	tags map[string]*string
 }
 
-func (c *fakeComputeResource) Update(ctx context.Context) error {
+func (c fakeComputeResource) Get(ctx context.Context, name string) (azure.Spec, error) {
+	return fakeSpec{}, nil
+}
+
+func (c fakeComputeResource) Update(ctx context.Context) error {
 	return nil
 }
 
-func (c *fakeComputeResource) Tags() map[string]*string {
+func (c fakeComputeResource) Tags() map[string]*string {
 	return c.tags
 }
 
-func (c *fakeComputeResource) SetTag(name string, value *string) {
+func (c fakeComputeResource) SetTag(name string, value *string) {
 	c.tags[name] = value
 }
 
@@ -35,7 +63,23 @@ func TestValidTagName(t *testing.T) {
 		{"arch", true},
 		{"tag?", false},
 		{"To thine own self be true, and it must follow, as the night the day, thou canst not then be false to any man.", true},
-		{"O, then, I see Queen Mab hath been with you. She is the fairies' midwife, and she comes In shape no bigger than an agate-stone On the fore-finger of an alderman, Drawn with a team of little atomies Athwart men's noses as they lie asleep; Her wagon-spokes made of long spinners' legs, The cover of the wings of grasshoppers, The traces of the smallest spider's web, The collars of the moonshine's watery beams, Her whip of cricket's bone, the lash of film, Her wagoner a small grey-coated gnat, Not so big as a round little worm Prick'd from the lazy finger of a maid;  Her chariot is an empty hazel-nut Made by the joiner squirrel or old grub, Time out o' mind the fairies' coachmakers.", false},
+		{`O, then, I see Queen Mab hath been with you. 
+She is the fairies' midwife, and she comes 
+In shape no bigger than an agate-stone 
+On the fore-finger of an alderman, 
+Drawn with a team of little atomies 
+Athwart men's noses as they lie asleep; 
+Her wagon-spokes made of long spinners' legs, 
+The cover of the wings of grasshoppers, 
+The traces of the smallest spider's web, 
+The collars of the moonshine's watery beams, 
+Her whip of cricket's bone, the lash of film, 
+Her wagoner a small grey-coated gnat, 
+Not so big as a round little worm 
+Prick'd from the lazy finger of a maid; 
+Her chariot is an empty hazel-nut 
+Made by the joiner squirrel or old grub, 
+Time out o' mind the fairies' coachmakers. `, false},
 	}
 
 	config := DefaultConfigOptions()
@@ -131,20 +175,132 @@ func TestConvertLabelValToValidTagVal(t *testing.T) {
 // I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
 // ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
+	var vals = [2]string{"test", "hr"}
+	var armTagsTest = []struct {
+		name           string
+		tags           map[string]*string
+		labels         map[string]string
+		expectedLabels map[string]string
+	}{
+		{
+			"node1",
+			map[string]*string{"env": &vals[0], "dept": &vals[1]},
+			map[string]string{},
+			map[string]string{"azure.tags/env": vals[0], "azure.tags/dept": vals[1]},
+		},
+	}
+
+	config := DefaultConfigOptions() // tag-to-node only
+
+	k8sClient := newTestK8sClient()
+	nodes := k8sClient.CoreV1().Nodes()
+	// _, err := nodes.Create(newTestNode(name, nil))
+	// if err != nil {
+	// 	t.Errorf("creating fake node failed: %q", err)
+	// }
+	// node := nodes.Get("testNode", metav1.GetOptions{})
+
+	r := defaultNodeLabelReconciler()
+	computeResource := fakeComputeResource{}
+
+	for _, tt := range armTagsTest {
+		// do stuff
+		t.Run(tt.name, func(t *testing.T) {
+			computeResource.tags = tt.tags
+			// node := newTestNode(tt.name, tt.labels)
+
+			_, err := nodes.Create(newTestNode(tt.name, tt.labels))
+			if err != nil {
+				t.Errorf("creating fake node failed: %q", err)
+			}
+			node, err := nodes.Get(tt.name, metav1.GetOptions{})
+			if err != nil {
+				t.Errorf("failed to get node: %q", err)
+			}
+
+			// I think r.Update() is causing issues still since I can't actually update...
+			// try/catch sort of thing in case the error is from trying to update?
+			err = r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
+			if err != nil {
+				t.Errorf("failed to apply tags to nodes: %q", err)
+			}
+
+			for k, v := range tt.expectedLabels {
+				val, ok := node.Labels[k]
+				assert.True(t, ok)
+				assert.Equal(t, v, val)
+			}
+		})
+	}
 }
 
 func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
+	var vals = [2]string{"banana", "broccoli"}
 	var nodeLabelsTest = []struct {
+		name         string
 		labels       map[string]string
 		tags         map[string]*string
 		expectedTags map[string]*string
 	}{
-		{nil, nil, nil},
+		{
+			"resource1",
+			map[string]string{"favfruit": vals[0], "favveg": vals[1]},
+			map[string]*string{},
+			map[string]*string{"favfruit": &vals[0], "favveg": &vals[1]},
+		},
 	}
+
+	config := DefaultConfigOptions()
+	config.SyncDirection = NodeToARM
+	r := defaultNodeLabelReconciler()
+	computeResource := fakeComputeResource{}
 
 	// create a fake ComputeResource and fake Node for each test and use those I guess
 	for _, tt := range nodeLabelsTest {
-		// do stuff
-		fmt.Println(tt)
+		t.Run(tt.name, func(t *testing.T) {
+			computeResource.tags = tt.tags
+			node := newTestNode(tt.name, tt.labels)
+
+			err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
+			if err != nil {
+				t.Errorf("failed to apply labels to azure resources: %q", err)
+			}
+
+			for k, vptr := range tt.expectedTags {
+				valptr, ok := computeResource.Tags()[k]
+				assert.True(t, ok)
+				v := *vptr
+				val := *valptr
+				assert.Equal(t, v, val)
+			}
+		})
 	}
 }
+
+func newTestK8sClient() kubernetes.Interface {
+	return fake.NewSimpleClientset()
+}
+
+func newTestNode(name string, labels map[string]string) *corev1.Node {
+	node := &corev1.Node{}
+	node.Name = name
+	if labels != nil {
+		node.Labels = labels
+	}
+	return node
+}
+
+func defaultNamespacedName(name string) types.NamespacedName {
+	return types.NamespacedName{Name: name, Namespace: "default"}
+}
+
+func defaultNodeLabelReconciler() *ReconcileNodeLabel {
+	return &ReconcileNodeLabel{
+		Client: ctrlfake.NewFakeClientWithScheme(scheme.Scheme),
+		Log:    ctrl.Log.WithName("test"),
+		ctx:    context.Background(),
+	}
+}
+
+// test authentication?
+// test config stuff?

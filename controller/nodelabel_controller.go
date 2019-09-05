@@ -32,11 +32,8 @@ type ReconcileNodeLabel struct {
 	ctx      context.Context
 }
 
-// now I should be able to make ComputeResource objects in testing right? Is that too mock object-y if
-// I define new functions?
-// I may still need to make some functions easier to test.
 type ComputeResource interface {
-	Get(ctx context.Context, name string) (azure.Spec, error) // return type Spec?
+	Get(ctx context.Context, name string) (azure.Spec, error)
 	Update(ctx context.Context) error
 	Tags() map[string]*string
 	SetTag(name string, value *string)
@@ -68,14 +65,14 @@ func (m VirtualMachine) Get(ctx context.Context, name string) (azure.Spec, error
 }
 
 func (m VirtualMachine) Update(ctx context.Context) error {
-	if err := m.client.Update(ctx, *m.vm.Spec().Name, m.vm); err != nil {
+	if err := m.client.Update(ctx, m.vm.Name(), m.vm); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (m VirtualMachine) Tags() map[string]*string {
-	return m.vm.Spec().Tags
+	return m.vm.Tags()
 }
 
 func (m VirtualMachine) SetTag(name string, value *string) {
@@ -114,14 +111,14 @@ func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (azure.Spe
 
 // does this work the wayw it's supposed to?
 func (m VirtualMachineScaleSet) Update(ctx context.Context) error {
-	if err := m.client.Update(ctx, *m.vmss.Spec().Name, m.vmss); err != nil {
+	if err := m.client.Update(ctx, m.vmss.Name(), m.vmss); err != nil {
 		return err
 	}
 	return nil
 }
 
 func (m VirtualMachineScaleSet) Tags() map[string]*string {
-	return m.vmss.Spec().Tags
+	return m.vmss.Tags()
 }
 
 // is this actually being set? deep or shallow copy?
@@ -167,13 +164,13 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	switch provider.ResourceType {
 	case VMSS:
 		// Add VMSS tags to node
-		if err := r.reconcileVMSS(req, &provider, &node, configOptions); err != nil {
+		if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
 			log.Error(err, "failed to apply tags to nodes")
 			return reconcile.Result{}, err
 		}
 	case VM:
 		// Add VM tags to node
-		if err := r.reconcileVMs(req, &provider, &node, configOptions); err != nil {
+		if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
 			log.Error(err, "failed to apply tags to nodes")
 			return reconcile.Result{}, err
 		}
@@ -185,7 +182,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 }
 
 // pass VMSS -> tags info and assign to nodes on VMs (unless node already has label)
-func (r *ReconcileNodeLabel) reconcileVMSS(req reconcile.Request, provider *azure.Resource, node *corev1.Node, configOptions ConfigOptions) error {
+func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource, node *corev1.Node, configOptions ConfigOptions) error {
 	// each VMSS may have multiple nodes, but I think each nodes is only in one VMSS
 	// whats the fastest way to check if Node already has label? benefit of map
 
@@ -194,12 +191,12 @@ func (r *ReconcileNodeLabel) reconcileVMSS(req reconcile.Request, provider *azur
 		return err
 	}
 
-	if err := r.applyTagsToNodes(req, vmss, node, configOptions); err != nil {
+	if err := r.applyTagsToNodes(namespacedName, vmss, node, configOptions); err != nil {
 		return err
 	}
 
 	// assign all labels on Node to VMSS, if not already there
-	if err := r.applyLabelsToAzureResource(req, vmss, node, configOptions); err != nil {
+	if err := r.applyLabelsToAzureResource(namespacedName, vmss, node, configOptions); err != nil {
 		return err
 	}
 
@@ -207,25 +204,26 @@ func (r *ReconcileNodeLabel) reconcileVMSS(req reconcile.Request, provider *azur
 }
 
 // I want to get to the point where this function can be called on either vm or vmss
-func (r *ReconcileNodeLabel) reconcileVMs(req reconcile.Request, provider *azure.Resource, node *corev1.Node, configOptions ConfigOptions) error {
+func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource, node *corev1.Node, configOptions ConfigOptions) error {
 	vm, err := NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
 
-	if err := r.applyTagsToNodes(req, vm, node, configOptions); err != nil {
+	if err := r.applyTagsToNodes(namespacedName, vm, node, configOptions); err != nil {
 		return err
 	}
 
-	if err := r.applyLabelsToAzureResource(req, vm, node, configOptions); err != nil {
+	if err := r.applyLabelsToAzureResource(namespacedName, vm, node, configOptions); err != nil {
 		return err
 	}
 	return nil
 }
 
 // problem with faking is r.Update() and r.Recorder
-func (r *ReconcileNodeLabel) applyTagsToNodes(req reconcile.Request, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) error {
-	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
+// maybe return bool for updating?
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) error {
+	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
@@ -247,6 +245,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(req reconcile.Request, computeReso
 				case ARMPrecedence:
 					// set label anyway
 					node.Labels[validLabelName] = *tagVal
+					// do I add something here to only make it run if not a test??
 					if err := r.Update(r.ctx, node); err != nil {
 						return err
 					}
@@ -268,8 +267,8 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(req reconcile.Request, computeReso
 }
 
 // I need to make sure I can get update to work with ComputeResource interface! value vs reference issue
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(req reconcile.Request, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) error {
-	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) error {
+	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
@@ -292,7 +291,6 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(req reconcile.Request, c
 				// add label as tag
 				log.V(1).Info("applying labels to VMSS", "labelName", labelName, "labelVal", labelVal)
 
-				// computeClient.Tags()[validTagName] = &labelVal // problem!!!
 				computeResource.SetTag(validTagName, &labelVal)
 				if err := computeResource.Update(r.ctx); err != nil {
 					// log.Error(err, "failed to update VMSS", "labelName", validTagName, "labelVal", labelVal)
@@ -302,7 +300,6 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(req reconcile.Request, c
 				switch configOptions.ConflictPolicy {
 				case NodePrecedence:
 					// set tag anyway
-					// computeClient.Tags()[validTagName] = &labelVal // problem!!!
 					computeResource.SetTag(validTagName, &labelVal)
 					if err := computeResource.Update(r.ctx); err != nil {
 						// log.Error(err, "failed to update VMSS", "labelName", validTagName, "labelVal", labelVal)
