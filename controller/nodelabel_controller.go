@@ -147,10 +147,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
-	// test
-	resp_body := azure.AddMetadata()
-	log.V(0).Info(resp_body)
-
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
 	optionsNamespacedName := types.NamespacedName{Name: "node-label-operator", Namespace: "default"} // is this okay
