@@ -48,6 +48,16 @@ func Prefix(namePrefix string) SpecOption {
 	}
 }
 
+func UserAssignedIdentity() SpecOption {
+	return func(o *Spec) *Spec {
+		o.internal.Identity.Type = compute.ResourceIdentityTypeUserAssigned
+		for id, _ := range o.internal.Identity.UserAssignedIdentities {
+			o.internal.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
+		}
+		return o
+	}
+}
+
 func DefaultSpec() *Spec {
 	return &Spec{&compute.VirtualMachineScaleSet{
 		Sku: &compute.Sku{},

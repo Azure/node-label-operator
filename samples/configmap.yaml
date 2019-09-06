@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-    name: tag-label-sync
+    name: node-label-operator 
     namespace: default
 data:
     labelPrefix: "azure.tags"

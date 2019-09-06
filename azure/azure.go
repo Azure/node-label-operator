@@ -11,19 +11,6 @@ import (
 
 const userAgent string = "genesys"
 
-func NewAvailabilitySetClient(subID string) (compute.AvailabilitySetsClient, error) {
-	a, err := injectAuthorizer()
-	if err != nil {
-		return compute.AvailabilitySetsClient{}, err
-	}
-	client := compute.NewAvailabilitySetsClient(subID)
-	client.Authorizer = a
-	if err := client.AddToUserAgent(userAgent); err != nil {
-		return compute.AvailabilitySetsClient{}, err
-	}
-	return client, nil
-}
-
 func NewVMClient(subID string) (compute.VirtualMachinesClient, error) {
 	a, err := injectAuthorizer()
 	if err != nil {

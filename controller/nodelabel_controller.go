@@ -53,6 +53,10 @@ func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName stri
 	if err != nil {
 		return VirtualMachine{}, err
 	}
+
+	assign := vms.UserAssignedIdentity()
+	assign(vm)
+
 	return VirtualMachine{client: client, vm: vm}, nil
 }
 
@@ -61,6 +65,10 @@ func (m VirtualMachine) Get(ctx context.Context, name string) (azure.Spec, error
 	if err != nil {
 		return *vm, err
 	}
+
+	assign := vms.UserAssignedIdentity()
+	assign(vm)
+
 	return *vm, nil
 }
 
@@ -95,6 +103,9 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 		return VirtualMachineScaleSet{}, err
 	}
 
+	assign := scalesets.UserAssignedIdentity()
+	assign(vmss) // spec.Set?
+
 	return VirtualMachineScaleSet{client: client, vmss: vmss}, nil
 }
 
@@ -104,6 +115,10 @@ func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (azure.Spe
 	if err != nil {
 		return *vmss, err
 	}
+
+	assign := scalesets.UserAssignedIdentity()
+	assign(vmss) // spec.Set?
+
 	return *vmss, nil
 }
 
@@ -131,6 +146,10 @@ func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
 func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
+
+	// test
+	resp_body := azure.AddMetadata()
+	log.V(0).Info(resp_body)
 
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
@@ -179,58 +198,63 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 }
 
 // pass VMSS -> tags info and assign to nodes on VMs (unless node already has label)
-func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource, node *corev1.Node, configOptions ConfigOptions) error {
-	// each VMSS may have multiple nodes, but I think each nodes is only in one VMSS
-	// whats the fastest way to check if Node already has label? benefit of map
-
+func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource,
+	node *corev1.Node, configOptions ConfigOptions) error {
 	vmss, err := NewVMSS(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
 
-	updatedNode, err := r.applyTagsToNodes(namespacedName, vmss, node, configOptions)
-	if err != nil {
-		return err
-	}
-	if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
-		return err
+	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
+		updatedNode, err := r.applyTagsToNodes(namespacedName, vmss, node, configOptions)
+		if err != nil {
+			return err
+		}
+		if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
+			return err
+		}
 	}
 
 	// assign all labels on Node to VMSS, if not already there
-	updatedVMSS, err := r.applyLabelsToAzureResource(namespacedName, vmss, node, configOptions)
-	if err != nil {
-		return err
-	}
-	if err = updatedVMSS.Update(r.ctx); err != nil {
-		// log.Error(err, "failed to update VMSS", "labelName", validTagName, "labelVal", labelVal)
-		// log.Error(err, "failed to update VMSS")
-		return err
+	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
+		updatedVMSS, err := r.applyLabelsToAzureResource(namespacedName, vmss, node, configOptions)
+		if err != nil {
+			return err
+		}
+		// I shouldn't just be updating no matter what... not if arm-to-node
+		if err = updatedVMSS.Update(r.ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
 }
 
-// I want to get to the point where this function can be called on either vm or vmss
-func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource, node *corev1.Node, configOptions ConfigOptions) error {
+func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource,
+	node *corev1.Node, configOptions ConfigOptions) error {
 	vm, err := NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
 
-	updatedNode, err := r.applyTagsToNodes(namespacedName, vm, node, configOptions)
-	if err != nil {
-		return err
-	}
-	if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
-		return err
+	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
+		updatedNode, err := r.applyTagsToNodes(namespacedName, vm, node, configOptions)
+		if err != nil {
+			return err
+		}
+		if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
+			return err
+		}
 	}
 
-	updatedVM, err := r.applyLabelsToAzureResource(namespacedName, vm, node, configOptions)
-	if err != nil {
-		return err
-	}
-	if err = updatedVM.Update(r.ctx); err != nil {
-		return err
+	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
+		updatedVM, err := r.applyLabelsToAzureResource(namespacedName, vm, node, configOptions)
+		if err != nil {
+			return err
+		}
+		if err = updatedVM.Update(r.ctx); err != nil {
+			return err
+		}
 	}
 
 	return nil
@@ -242,87 +266,83 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
-	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
-		for tagName, tagVal := range computeResource.Tags() {
-			if !ValidLabelName(tagName) {
-				log.V(0).Info("invalid label name", "tag name", tagName)
-				continue
-			}
-			// what if key exists but different value? what takes priority? currently just going to ignore and only add tags that don't exist
-			validLabelName := ConvertTagNameToValidLabelName(tagName, configOptions)
-			labelVal, ok := node.Labels[validLabelName]
-			if !ok {
-				// add tag as label
-				log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
+	for tagName, tagVal := range computeResource.Tags() {
+		if !ValidLabelName(tagName) {
+			log.V(0).Info("invalid label name", "tag name", tagName)
+			continue
+		}
+		validLabelName := ConvertTagNameToValidLabelName(tagName, configOptions)
+		labelVal, ok := node.Labels[validLabelName]
+		if !ok {
+			// add tag as label
+			log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
+			node.Labels[validLabelName] = *tagVal
+		} else if labelVal != *tagVal {
+			switch configOptions.ConflictPolicy {
+			case ARMPrecedence:
+				// set label anyway
+				log.V(1).Info("overriding existing node label with ARM tag", "tagName", tagName, "tagVal", tagVal)
 				node.Labels[validLabelName] = *tagVal
-			} else if labelVal != *tagVal {
-				log.V(0).Info("updating", "using policy", configOptions.ConflictPolicy)
-				switch configOptions.ConflictPolicy {
-				case ARMPrecedence:
-					// set label anyway
-					log.V(1).Info("overriding existing node label with ARM tag", "tagName", tagName, "tagVal", tagVal)
-					node.Labels[validLabelName] = *tagVal
-				case NodePrecedence:
-					// do nothing
-					log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
-				case Ignore:
-					// raise k8s event
-					r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
-						fmt.Sprintf("ARM tag was not applied to node because a different value for '%s' already exists (%s != %s).", tagName, *tagVal, labelVal))
-					log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
-				default:
-					return node, errors.New("unrecognized conflict policy")
-				}
+			case NodePrecedence:
+				// do nothing
+				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
+			case Ignore:
+				// raise k8s event
+				r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
+					fmt.Sprintf("ARM tag was not applied to node because a different value for '%s' already exists (%s != %s).", tagName, *tagVal, labelVal))
+				log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
+			default:
+				return node, errors.New("unrecognized conflict policy")
 			}
 		}
 	}
+
 	return node, nil
 }
 
 // I need to make sure I can get update to work with ComputeResource interface! value vs reference issue
 func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (ComputeResource, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
-	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
+	log.V(1).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
-	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
-		if len(computeResource.Tags()) > maxNumTags {
-			// error
-			log.V(1).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
-			return computeResource, nil
+	if len(computeResource.Tags()) > maxNumTags {
+		log.V(0).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
+		return computeResource, nil
+	}
+
+	for labelName, labelVal := range node.Labels {
+		if !ValidTagName(labelName, configOptions) {
+			// log.Error(errors.New(fmt.Sprintf("invalid tag name")), fmt.Sprintf("label name: %s", labelName))
+			log.V(0).Info("invalid tag name", "label name", labelName)
+			continue
 		}
-		for labelName, labelVal := range node.Labels {
-			if !ValidTagName(labelName, configOptions) {
-				// log.Error(errors.New(fmt.Sprintf("invalid tag name")), fmt.Sprintf("label name: %s", labelName))
-				log.V(0).Info("invalid tag name", "label name", labelName)
-				continue
-			}
-			validTagName := ConvertLabelNameToValidTagName(labelName, configOptions)
-			tagVal, ok := computeResource.Tags()[validTagName]
-			if !ok {
-				// add label as tag
-				log.V(1).Info("applying labels to Azure resource", "labelName", labelName, "labelVal", labelVal)
-				// is  this causing the problem in my unit tests?
+		validTagName := ConvertLabelNameToValidTagName(labelName, configOptions)
+		tagVal, ok := computeResource.Tags()[validTagName]
+		if !ok {
+			// add label as tag
+			log.V(1).Info("applying labels to Azure resource", "labelName", labelName, "labelVal", labelVal)
+			// is  this causing the problem in my unit tests?
+			computeResource.SetTag(validTagName, &labelVal)
+		} else if *tagVal != labelVal {
+			switch configOptions.ConflictPolicy {
+			case NodePrecedence:
+				// set tag anyway
+				log.V(1).Info("overriding existing ARM tag with node label", "labelName", labelName, "labelVal", labelVal)
 				computeResource.SetTag(validTagName, &labelVal)
-			} else if *tagVal != labelVal {
-				switch configOptions.ConflictPolicy {
-				case NodePrecedence:
-					// set tag anyway
-					log.V(1).Info("overriding existing ARM tag with node label", "labelName", labelName, "labelVal", labelVal)
-					computeResource.SetTag(validTagName, &labelVal)
-				case ARMPrecedence:
-					// do nothing
-					log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
-				case Ignore:
-					// raise kubernetes event
-					r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
-						fmt.Sprintf("node label was not applied to Azure resource because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
-					log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
-				default:
-					return computeResource, errors.New("unrecognized conflict policy")
-				}
+			case ARMPrecedence:
+				// do nothing
+				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
+			case Ignore:
+				// raise k8s event
+				r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
+					fmt.Sprintf("node label was not applied to Azure resource because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
+				log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
+			default:
+				return computeResource, errors.New("unrecognized conflict policy")
 			}
 		}
 	}
+
 	return computeResource, nil
 }
 

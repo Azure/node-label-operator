@@ -25,6 +25,16 @@ func (o Spec) Tags() map[string]*string {
 	return o.internal.Tags
 }
 
+func UserAssignedIdentity() SpecOption {
+	return func(o *Spec) *Spec {
+		o.internal.Identity.Type = compute.ResourceIdentityTypeUserAssigned
+		for id, _ := range o.internal.Identity.UserAssignedIdentities {
+			o.internal.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineIdentityUserAssignedIdentitiesValue{}
+		}
+		return o
+	}
+}
+
 func defaultSpec() *Spec {
 	// shouild I fill this out?
 	return &Spec{&compute.VirtualMachine{}}

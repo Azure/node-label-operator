@@ -7,12 +7,15 @@ package azure
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
 	"github.com/Azure/go-autorest/autorest"
+	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
@@ -136,6 +139,26 @@ func getMSICredentials() (auth.ClientCredentialsConfig, error) {
 	return auth.ClientCredentialsConfig{ClientID: r.ClientID, TenantID: ""}, nil
 }
 
+func getPodMSICredentials() (auth.ClientCredentialsConfig, error) {
+	resource := os.Getenv("AZURE_IDENTITY")
+	clientID := os.Getenv("AZURE_CLIENT_ID")
+
+	// _, err := getIdentityToken(resource)
+	// if err != nil {
+	// 	return err
+	// }
+
+	_, err := getUserAssignedIdentityToken(resource, clientID)
+	if err != nil {
+		return auth.ClientCredentialsConfig{}, err
+	}
+
+	return auth.ClientCredentialsConfig{
+		ClientID: clientID,
+		TenantID: "",
+	}, nil
+}
+
 type responseToken struct {
 	AccessToken  string `json:"access_token"`
 	ClientID     string `json:"client_id"`
@@ -145,10 +168,13 @@ type responseToken struct {
 	NotBefore    string `json:"not_before"`
 	Resource     string `json:"resource"`
 	TokenType    string `json:"token_type"`
+	// PodNS        string `json:"podns"`
+	// PodName      string `json:"podname"`
 }
 
+// where did this identity string come from?
 func requestIdentityToken() (*responseToken, error) {
-	endpoint, err := url.Parse("http://169.254.169.254/metadata/identity/oauth2/token")
+	endpoint, err := url.Parse("http://169.254.169.254/metadata/identity/oauth2/token") // the "well known endpoint for getting MSI authentication tokens"
 	if err != nil {
 		return nil, err
 	}
@@ -162,6 +188,10 @@ func requestIdentityToken() (*responseToken, error) {
 		return nil, err
 	}
 	req.Header.Add("Metadata", "true")
+
+	podns := req.Header.Get("podns")
+	podname := req.Header.Get("podname")
+	fmt.Println(podns, podname)
 
 	client := &http.Client{}
 	client.Timeout = 5 * time.Second
@@ -183,4 +213,47 @@ func requestIdentityToken() (*responseToken, error) {
 	}
 
 	return &r, nil
+}
+
+// I can get resource if I know subscription ID, resource group, and resource name...
+func getIdentityToken(resource string) (*adal.Token, error) {
+	endpoint, err := adal.GetMSIVMEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	// r, err := requestIdentityToken()
+	// if err != nil {
+	// 	return err
+	// }
+	// idStateMap, err := k8sClient.ListPodIds()
+	// do I have to start a server here?
+
+	// I could have an environment variable pointing to a file that stores identity info...
+	// does that need to be stored in keyvault?
+	// get clientId and id (resource ID for identity)
+
+	// how do I get resource name???
+	spt, err := adal.NewServicePrincipalTokenFromMSI(endpoint, resource)
+	if err != nil {
+		return nil, err
+	}
+	token := spt.Token()
+	return &token, nil
+}
+
+func getUserAssignedIdentityToken(resource, id string) (*adal.Token, error) {
+	endpoint, err := adal.GetMSIVMEndpoint()
+	if err != nil {
+		return nil, err
+	}
+
+	// do I have to grab all pods to get clientID??
+
+	spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(endpoint, resource, id)
+	if err != nil {
+		return nil, err
+	}
+	token := spt.Token()
+	return &token, nil
 }
