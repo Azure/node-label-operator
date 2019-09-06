@@ -11,11 +11,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"net/url"
-	"os"
 	"time"
 
 	"github.com/Azure/go-autorest/autorest"
-	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/Azure/go-autorest/autorest/azure/auth"
 )
@@ -78,6 +76,7 @@ func injectGraphAuthorizer() (autorest.Authorizer, error) {
 	return provideGraphAuthorizer(config)
 }
 
+// use auth.NewAuthorizerFromEnvironment instead?
 func provideConfiguration() (*authContext, error) {
 	file, err := auth.GetSettingsFromFile() // comes from AZURE_AUTH_LOCATION
 	if err != nil {
@@ -139,25 +138,25 @@ func getMSICredentials() (auth.ClientCredentialsConfig, error) {
 	return auth.ClientCredentialsConfig{ClientID: r.ClientID, TenantID: ""}, nil
 }
 
-func getPodMSICredentials() (auth.ClientCredentialsConfig, error) {
-	resource := os.Getenv("AZURE_IDENTITY")
-	clientID := os.Getenv("AZURE_CLIENT_ID")
+// func getPodMSICredentials() (auth.ClientCredentialsConfig, error) {
+// 	resource := os.Getenv("AZURE_IDENTITY")
+// 	clientID := os.Getenv("AZURE_CLIENT_ID")
 
-	// _, err := getIdentityToken(resource)
-	// if err != nil {
-	// 	return err
-	// }
+// 	// _, err := getIdentityToken(resource)
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
 
-	_, err := getUserAssignedIdentityToken(resource, clientID)
-	if err != nil {
-		return auth.ClientCredentialsConfig{}, err
-	}
+// 	_, err := getUserAssignedIdentityToken(resource, clientID)
+// 	if err != nil {
+// 		return auth.ClientCredentialsConfig{}, err
+// 	}
 
-	return auth.ClientCredentialsConfig{
-		ClientID: clientID,
-		TenantID: "",
-	}, nil
-}
+// 	return auth.ClientCredentialsConfig{
+// 		ClientID: clientID,
+// 		TenantID: "",
+// 	}, nil
+// }
 
 type responseToken struct {
 	AccessToken  string `json:"access_token"`
@@ -168,8 +167,6 @@ type responseToken struct {
 	NotBefore    string `json:"not_before"`
 	Resource     string `json:"resource"`
 	TokenType    string `json:"token_type"`
-	// PodNS        string `json:"podns"`
-	// PodName      string `json:"podname"`
 }
 
 // where did this identity string come from?
@@ -215,45 +212,45 @@ func requestIdentityToken() (*responseToken, error) {
 	return &r, nil
 }
 
-// I can get resource if I know subscription ID, resource group, and resource name...
-func getIdentityToken(resource string) (*adal.Token, error) {
-	endpoint, err := adal.GetMSIVMEndpoint()
-	if err != nil {
-		return nil, err
-	}
+// // I can get resource if I know subscription ID, resource group, and resource name...
+// func getIdentityToken(resource string) (*adal.Token, error) {
+// 	endpoint, err := adal.GetMSIVMEndpoint()
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	// r, err := requestIdentityToken()
-	// if err != nil {
-	// 	return err
-	// }
-	// idStateMap, err := k8sClient.ListPodIds()
-	// do I have to start a server here?
+// 	// r, err := requestIdentityToken()
+// 	// if err != nil {
+// 	// 	return err
+// 	// }
+// 	// idStateMap, err := k8sClient.ListPodIds()
+// 	// do I have to start a server here?
 
-	// I could have an environment variable pointing to a file that stores identity info...
-	// does that need to be stored in keyvault?
-	// get clientId and id (resource ID for identity)
+// 	// I could have an environment variable pointing to a file that stores identity info...
+// 	// does that need to be stored in keyvault?
+// 	// get clientId and id (resource ID for identity)
 
-	// how do I get resource name???
-	spt, err := adal.NewServicePrincipalTokenFromMSI(endpoint, resource)
-	if err != nil {
-		return nil, err
-	}
-	token := spt.Token()
-	return &token, nil
-}
+// 	// how do I get resource name???
+// 	spt, err := adal.NewServicePrincipalTokenFromMSI(endpoint, resource)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	token := spt.Token()
+// 	return &token, nil
+// }
 
-func getUserAssignedIdentityToken(resource, id string) (*adal.Token, error) {
-	endpoint, err := adal.GetMSIVMEndpoint()
-	if err != nil {
-		return nil, err
-	}
+// func getUserAssignedIdentityToken(resource, id string) (*adal.Token, error) {
+// 	endpoint, err := adal.GetMSIVMEndpoint()
+// 	if err != nil {
+// 		return nil, err
+// 	}
 
-	// do I have to grab all pods to get clientID??
+// 	// do I have to grab all pods to get clientID??
 
-	spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(endpoint, resource, id)
-	if err != nil {
-		return nil, err
-	}
-	token := spt.Token()
-	return &token, nil
-}
+// 	spt, err := adal.NewServicePrincipalTokenFromMSIWithUserAssignedID(endpoint, resource, id)
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	token := spt.Token()
+// 	return &token, nil
+// }

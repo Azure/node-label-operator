@@ -9,7 +9,7 @@ import (
 	"github.com/Azure/azure-sdk-for-go/services/msi/mgmt/2018-11-30/msi"
 )
 
-const userAgent string = "genesys"
+const userAgent string = "node-label-operator"
 
 func NewVMClient(subID string) (compute.VirtualMachinesClient, error) {
 	a, err := injectAuthorizer()

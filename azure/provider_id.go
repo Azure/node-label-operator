@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	// "github.com/Azure/go-autorest/autorest/azure"
 )
 
 type Resource struct {
@@ -18,7 +17,6 @@ type Resource struct {
 }
 
 func ParseProviderID(providerID string) (Resource, error) {
-	// return azure.ParseResourceID(providerID)
 	return parseResourceID(providerID)
 }
 
@@ -35,7 +33,6 @@ func parseResourceID(resourceID string) (Resource, error) {
 	}
 
 	v := strings.Split(match[5], "/")
-	// resourceName := v[len(v)-1]
 	resourceName := v[len(v)-3]
 
 	result := Resource{
