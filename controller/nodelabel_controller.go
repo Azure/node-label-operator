@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,7 +42,8 @@ type ComputeResource interface {
 
 type VirtualMachine struct {
 	client *vms.Client
-	vm     *vms.Spec
+	// vm     *vms.Spec
+	vm *compute.VirtualMachineScaleSet
 }
 
 func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachine, error) {
@@ -80,11 +82,11 @@ func (m VirtualMachine) Update(ctx context.Context) error {
 }
 
 func (m VirtualMachine) Tags() map[string]*string {
-	return m.vm.Tags()
+	return m.vm.Spec.Tags
 }
 
 func (m VirtualMachine) SetTag(name string, value *string) {
-	m.vm.Spec().Tags[name] = value
+	m.vm.Spec.Tags[name] = value
 }
 
 type VirtualMachineScaleSet struct {
