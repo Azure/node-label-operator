@@ -147,6 +147,12 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
+	config, err := Debug()
+	if err != nil {
+		log.Error(err, "failed to get AzureConfig using azure.json")
+	}
+	log.V(0).Info("AzureConfig", "subscriptionID", config.SubscriptionID, "resourceGroup", config.ResourceGroupName, "tenantID", config.TenantID)
+
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
 	optionsNamespacedName := types.NamespacedName{Name: "node-label-operator", Namespace: "default"} // is this okay
