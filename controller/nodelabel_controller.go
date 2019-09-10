@@ -117,6 +117,8 @@ type VirtualMachineScaleSet struct {
 	group  string
 	client *compute.VirtualMachineScaleSetsClient
 	vmss   *compute.VirtualMachineScaleSet
+	// client *scalesets.Client
+	// vmss   *scalesets.Spec
 }
 
 func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachineScaleSet, error) {
@@ -190,12 +192,6 @@ func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.Virtu
 func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
-
-	config, err := Debug()
-	if err != nil {
-		log.Error(err, "failed to get AzureConfig using azure.json")
-	}
-	log.V(0).Info("AzureConfig", "subscriptionID", config.SubscriptionID, "resourceGroup", config.ResourceGroupName, "tenantID", config.TenantID)
 
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
