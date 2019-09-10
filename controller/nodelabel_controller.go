@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/Azure/azure-sdk-for-go/profiles/latest/compute/mgmt/compute"
+	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,8 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"node-label-operator.io/azure"
-	"node-label-operator.io/azure/scalesets"
-	"node-label-operator.io/azure/vms"
 )
 
 const (
@@ -34,111 +32,152 @@ type ReconcileNodeLabel struct {
 }
 
 type ComputeResource interface {
-	Get(ctx context.Context, name string) (azure.Spec, error)
+	// Get(ctx context.Context, name string) (azure.Spec, error)
 	Update(ctx context.Context) error
 	Tags() map[string]*string
 	SetTag(name string, value *string)
 }
 
 type VirtualMachine struct {
-	client *vms.Client
-	// vm     *vms.Spec
-	vm *compute.VirtualMachineScaleSet
+	group  string
+	client *compute.VirtualMachinesClient
+	vm     *compute.VirtualMachine
 }
 
 func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachine, error) {
-	client, err := vms.NewClient(subscriptionID, resourceGroup)
+	client, err := azure.NewVMClient(subscriptionID)
 	if err != nil {
 		return VirtualMachine{}, err
 	}
-	vm, err := client.Get(ctx, resourceName)
+	vm, err := client.Get(ctx, resourceGroup, resourceName, compute.InstanceView)
 	if err != nil {
 		return VirtualMachine{}, err
 	}
 
-	assign := vms.UserAssignedIdentity()
-	assign(vm)
+	vm = VMUserAssignedIdentity(vm)
 
-	return VirtualMachine{client: client, vm: vm}, nil
+	return VirtualMachine{group: resourceGroup, client: &client, vm: &vm}, nil
 }
 
-func (m VirtualMachine) Get(ctx context.Context, name string) (azure.Spec, error) {
-	vm, err := m.client.Get(ctx, name)
+func (m VirtualMachine) Get(ctx context.Context, name string) (compute.VirtualMachine, error) {
+	vm, err := m.client.Get(ctx, m.group, name, compute.InstanceView)
 	if err != nil {
-		return *vm, err
+		return vm, err
 	}
 
-	assign := vms.UserAssignedIdentity()
-	assign(vm)
+	vm = VMUserAssignedIdentity(vm)
 
-	return *vm, nil
+	return vm, nil
 }
 
 func (m VirtualMachine) Update(ctx context.Context) error {
-	if err := m.client.Update(ctx, m.vm.Name(), m.vm); err != nil {
+	f, err := m.client.CreateOrUpdate(ctx, m.group, *m.vm.Name, *m.vm)
+	if err != nil {
 		return err
 	}
+
+	if err := f.WaitForCompletionRef(ctx, m.client.Client); err != nil {
+		return err
+	}
+
+	vm, err := f.Result(*m.client)
+	if err != nil {
+		return err
+	}
+
+	m.vm = &vm
 	return nil
 }
 
 func (m VirtualMachine) Tags() map[string]*string {
-	return m.vm.Spec.Tags
+	return m.vm.Tags
 }
 
 func (m VirtualMachine) SetTag(name string, value *string) {
-	m.vm.Spec.Tags[name] = value
+	m.vm.Tags[name] = value
+}
+
+func VMUserAssignedIdentity(vm compute.VirtualMachine) compute.VirtualMachine {
+	vm.Identity.Type = compute.ResourceIdentityTypeUserAssigned
+	for id, _ := range vm.Identity.UserAssignedIdentities {
+		vm.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineIdentityUserAssignedIdentitiesValue{}
+	}
+	return vm
 }
 
 type VirtualMachineScaleSet struct {
-	client *scalesets.Client
-	vmss   *scalesets.Spec
+	group  string
+	client *compute.VirtualMachineScaleSetsClient
+	vmss   *compute.VirtualMachineScaleSet
+	// client *scalesets.Client
+	// vmss   *scalesets.Spec
 }
 
 // I'm not sure this is actually modifying the client :(
 func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachineScaleSet, error) {
-	client, err := scalesets.NewClient(subscriptionID, resourceGroup)
+	client, err := azure.NewScaleSetClient(subscriptionID)
 	if err != nil {
 		return VirtualMachineScaleSet{}, err
 	}
-	vmss, err := client.Get(ctx, resourceName)
+	vmss, err := client.Get(ctx, resourceGroup, resourceName)
 	if err != nil {
 		return VirtualMachineScaleSet{}, err
 	}
 
-	assign := scalesets.UserAssignedIdentity()
-	assign(vmss) // spec.Set?
+	vmss = VMSSUserAssignedIdentity(vmss)
 
-	return VirtualMachineScaleSet{client: client, vmss: vmss}, nil
+	return VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
 }
 
 // find a way to actually use get??
-func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (azure.Spec, error) {
-	vmss, err := m.client.Get(ctx, name)
+func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (compute.VirtualMachineScaleSet, error) {
+	vmss, err := m.client.Get(ctx, m.group, name)
 	if err != nil {
-		return *vmss, err
+		return compute.VirtualMachineScaleSet{}, err
 	}
 
-	assign := scalesets.UserAssignedIdentity()
-	assign(vmss) // spec.Set?
+	vmss = VMSSUserAssignedIdentity(vmss)
+	// assign := scalesets.UserAssignedIdentity()
+	// assign(vmss) // spec.Set?
 
-	return *vmss, nil
+	return vmss, nil
 }
 
 // does this work the wayw it's supposed to?
 func (m VirtualMachineScaleSet) Update(ctx context.Context) error {
-	if err := m.client.Update(ctx, m.vmss.Name(), m.vmss); err != nil {
+	f, err := m.client.CreateOrUpdate(ctx, m.group, *m.vmss.Name, *m.vmss)
+	if err != nil {
 		return err
 	}
+
+	if err := f.WaitForCompletionRef(ctx, m.client.Client); err != nil {
+		return err
+	}
+
+	vmss, err := f.Result(*m.client)
+	if err != nil {
+		return err
+	}
+
+	m.vmss = &vmss
 	return nil
 }
 
 func (m VirtualMachineScaleSet) Tags() map[string]*string {
-	return m.vmss.Tags()
+	return m.vmss.Tags
 }
 
 // is this actually being set? deep or shallow copy?
 func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
-	m.vmss.Spec().Tags[name] = value
+	m.vmss.Tags[name] = value
+}
+
+func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.VirtualMachineScaleSet {
+	vmss.Identity.Type = compute.ResourceIdentityTypeUserAssigned
+	for id, _ := range vmss.Identity.UserAssignedIdentities {
+		vmss.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
+	}
+	return vmss
 }
 
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;create;update;patch;delete
