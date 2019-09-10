@@ -5,7 +5,7 @@ metadata:
     namespace: default
 data:
     labelPrefix: "azure.tags"
+    tagPrefix: ""
     conflictPolicy: "ignore"
     syncDirection: "two-way"
-    interval: "2" 
     resourceGroup: "shoshanargwestus2"

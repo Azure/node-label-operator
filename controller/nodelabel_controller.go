@@ -109,8 +109,6 @@ type VirtualMachineScaleSet struct {
 	group  string
 	client *compute.VirtualMachineScaleSetsClient
 	vmss   *compute.VirtualMachineScaleSet
-	// client *scalesets.Client
-	// vmss   *scalesets.Spec
 }
 
 // I'm not sure this is actually modifying the client :(
@@ -137,8 +135,6 @@ func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (compute.V
 	}
 
 	vmss = VMSSUserAssignedIdentity(vmss)
-	// assign := scalesets.UserAssignedIdentity()
-	// assign(vmss) // spec.Set?
 
 	return vmss, nil
 }
@@ -302,6 +298,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (*corev1.Node, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
+	log.V(0).Info("configOptions", "tag prefix", configOptions.TagPrefix)
 
 	for tagName, tagVal := range computeResource.Tags() {
 		if !ValidLabelName(tagName) {

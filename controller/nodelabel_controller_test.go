@@ -13,19 +13,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
-
-	"node-label-operator.io/azure"
 )
-
-type fakeSpec struct{}
-
-func (s fakeSpec) Name() string {
-	return ""
-}
-
-func (s fakeSpec) Tags() map[string]*string {
-	return nil
-}
 
 type fakeComputeResource struct {
 	tags map[string]*string
@@ -35,9 +23,9 @@ func NewFakeComputeResource() fakeComputeResource {
 	return fakeComputeResource{tags: map[string]*string{}}
 }
 
-func (c fakeComputeResource) Get(ctx context.Context, name string) (azure.Spec, error) {
-	return fakeSpec{}, nil
-}
+// func (c fakeComputeResource) Get(ctx context.Context, name string) (azure.Spec, error) {
+// 	return fakeSpec{}, nil
+// }
 
 func (c fakeComputeResource) Update(ctx context.Context) error {
 	return nil
