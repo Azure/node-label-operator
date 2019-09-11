@@ -1,5 +1,26 @@
 
-# Contributing
+# Node Label Operator
+
+## Overview
+
+## Installation
+
+## Setup Instructions
+
+1. Create a cluster.
+2. Authentication:
+    1. If using Azure MSI (Managed Service Identity) through aad-pod-identity, create AzureIdentity and AzureIdentityBinding resources for your cluster, using the service principal or user-assigned identities already in your cluster. `kubectl apply -f samples/aadpodidentity.yaml` and `kubectl apply -f samples/aadpodidentitybinding.yaml`.
+    2. If using Azure AD Application ID and Secret credentials, set the following environment variables...
+2. Set up the Kubernetes ConfigMap. `kubectl apply -f samples/configmap.yaml`.
+    1. `syncDirection`
+    2. `labelPrefix`
+    3. `tagPrefix`
+    4. `conflictPolicy`
+    5. `resourceGroupFilter`
+3. You can edit `config/manager/manager.yaml`.
+4. Run `make` to build the controller, then `make run` to run the controller on your cluster.
+
+## Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
 Contributor License Agreement (CLA) declaring that you have the right to, and actually do, grant us
