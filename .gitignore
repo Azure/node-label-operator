@@ -13,3 +13,4 @@
 *.out
 
 private/
+controller/suite_test.go

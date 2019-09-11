@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT license.
+
 // example: azure:///subscriptions/8643025a-c059-4a48-85d0-d76f51d63a74/resourceGroups/shoshanargwestus2/providers/Microsoft.Compute/virtualMachineScaleSets/default-9c6ddaaa-f207fc77/virtualMachines/3
 
 package azure

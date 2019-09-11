@@ -5,6 +5,7 @@ import (
 	"os"
 
 	config "github.com/Azure/aad-pod-identity/pkg/config"
+	"github.com/Azure/go-autorest/autorest/adal"
 	"github.com/golang/glog"
 	yaml "gopkg.in/yaml.v2"
 )
@@ -33,4 +34,17 @@ func Debug() (*config.AzureConfig, error) {
 	}
 
 	return config, nil
+}
+
+func DebugMSIToken() (*adal.ServicePrincipalToken, error) {
+	msiEndpoint, err := adal.GetMSIVMEndpoint()
+	if err != nil {
+		return nil, err
+	}
+	resource := "https://management.azure.com/"
+	spt, err := adal.NewServicePrincipalTokenFromMSI(msiEndpoint, resource)
+	if err != nil {
+		return nil, err
+	}
+	return spt, nil
 }

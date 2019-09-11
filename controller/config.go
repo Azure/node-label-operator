@@ -1,8 +1,11 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT license.
+
 package controller
 
 import (
 	"encoding/json"
-	"time"
+	"errors"
 
 	corev1 "k8s.io/api/core/v1"
 )
@@ -11,6 +14,7 @@ const (
 	DefaultLabelPrefix         string = "azure.tags"
 	DefaultTagPrefix           string = "node.labels"
 	DefaultResourceGroupFilter string = "none"
+	UNSET                      string = "unset"
 )
 
 type SyncDirection string
@@ -30,12 +34,11 @@ const (
 )
 
 type ConfigOptions struct {
-	SyncDirection       SyncDirection  `json:"syncDirection"`       // how do I validate this?
-	Interval            string         `type:"int" json:"interval"` // how can I use a different type instead?
+	SyncDirection       SyncDirection  `json:"syncDirection"` // how do I validate this?
 	LabelPrefix         string         `json:"labelPrefix"`
 	TagPrefix           string         `json:"tagPrefix"`
 	ConflictPolicy      ConflictPolicy `json:"conflictPolicy"`
-	ResourceGroupFilter string         `json:"resourceGroupFilter"` // actually resource group filter
+	ResourceGroupFilter string         `json:"resourceGroupFilter"`
 }
 
 func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
@@ -44,31 +47,29 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 		return ConfigOptions{}, err
 	}
 
-	if configOptions.SyncDirection != TwoWay &&
+	if configOptions.SyncDirection == "" {
+		configOptions.SyncDirection = ARMToNode
+	} else if configOptions.SyncDirection != TwoWay &&
 		configOptions.SyncDirection != ARMToNode &&
 		configOptions.SyncDirection != NodeToARM {
-		configOptions.SyncDirection = ARMToNode
+		return ConfigOptions{}, errors.New("invalid sync direction")
 	}
 
-	if _, err := time.ParseDuration(configOptions.Interval); err != nil {
-		// error?
-		configOptions.Interval = "10h"
-	}
-
-	// I need a different way to check if not set b/c I need to allow for empty prefixes
-	if configOptions.LabelPrefix == "" {
+	if configOptions.LabelPrefix == UNSET {
 		configOptions.LabelPrefix = DefaultLabelPrefix
 	}
 
 	// also validate prefix?
-	if configOptions.TagPrefix == "" {
+	if configOptions.TagPrefix == UNSET {
 		configOptions.TagPrefix = DefaultTagPrefix
 	}
 
-	if configOptions.ConflictPolicy != Ignore &&
+	if configOptions.ConflictPolicy == "" {
+		configOptions.ConflictPolicy = ARMPrecedence
+	} else if configOptions.ConflictPolicy != Ignore &&
 		configOptions.ConflictPolicy != ARMPrecedence &&
 		configOptions.ConflictPolicy != NodePrecedence {
-		configOptions.ConflictPolicy = ARMPrecedence
+		return ConfigOptions{}, errors.New("invalid tag-to-label conflict policy")
 	}
 
 	if configOptions.ResourceGroupFilter == "" {
@@ -81,7 +82,6 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 func DefaultConfigOptions() ConfigOptions {
 	return ConfigOptions{
 		SyncDirection:       ARMToNode,
-		Interval:            "1", // todo
 		LabelPrefix:         DefaultLabelPrefix,
 		TagPrefix:           DefaultTagPrefix,
 		ConflictPolicy:      ARMPrecedence,
@@ -95,7 +95,7 @@ func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, 
 		return ConfigOptions{}, err
 	}
 
-	configOptions := ConfigOptions{}
+	configOptions := ConfigOptions{LabelPrefix: UNSET, TagPrefix: UNSET}
 	if err := json.Unmarshal(data, &configOptions); err != nil {
 		return ConfigOptions{}, err
 	}
