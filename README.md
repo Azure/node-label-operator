@@ -5,6 +5,12 @@
 
 ## Installation
 
+### Prerequisites
+- Go
+- Kubernetes
+- Azure CLI
+- access to an Azure account
+
 ## Setup Instructions
 
 1. Create a cluster.
