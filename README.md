@@ -3,6 +3,8 @@
 
 ## Overview
 
+The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node labels in an AKS cluster.
+
 ## Installation
 
 ### Prerequisites
