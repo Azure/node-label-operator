@@ -13,9 +13,9 @@ namePrefix: node-label-operator-
 #  someName: someValue
 
 bases:
-- ../crd
 - ../rbac
 - ../manager
+# - ../crd
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
 #- ../webhook
 # [CERTMANAGER] To enable cert-manager, uncomment all sections with 'CERTMANAGER'. 'WEBHOOK' components are required.

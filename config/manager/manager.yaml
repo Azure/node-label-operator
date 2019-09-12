@@ -21,6 +21,7 @@ spec:
     metadata:
       labels:
         control-plane: controller-manager
+        aadpodidbinding: node-label-operator
     spec:
       containers:
       - command:

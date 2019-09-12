@@ -8,6 +8,7 @@ import (
 	"errors"
 
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 const (
@@ -101,4 +102,8 @@ func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, 
 	}
 
 	return configOptions, nil
+}
+
+func OptionsConfigMapNamespacedName() types.NamespacedName {
+	return types.NamespacedName{Name: "node-label-operator", Namespace: "node-label-operator-system"}
 }

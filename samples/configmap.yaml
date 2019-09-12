@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
     name: node-label-operator 
-    namespace: default
+    namespace: node-label-operator-system 
 data:
     labelPrefix: "azure.tags"
     tagPrefix: ""
