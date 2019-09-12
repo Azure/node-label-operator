@@ -23,6 +23,7 @@ import (
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	"sigs.k8s.io/controller-runtime/pkg/manager"
 	// +kubebuilder:scaffold:imports
 )
 
@@ -54,6 +55,36 @@ func TestFunc(t *testing.T) {
 		t.Error("error message")
 	}
 
+	mgr, err := manager.New(cfg, manager.Options{})
+	if err != nil {
+		t.Error("error message")
+	}
+
+	_ = mgr.GetClient()
+
+	// reconcileFunc
+
 	testEnv.Stop()
 
 }
+
+// func SetupTestReconcile(inner reconcile.Reconciler) (reconcile.Reconciler, chan reconcile.Request) {
+// 	requests := make(chan reconcile.Request)
+// 	fn := reconcile.Func(func(req reconcile.Request) (reconcile.Result, error) {
+// 		result, err := inner.Reconcile(req)
+// 		requests <- req
+// 		return result, err
+// 	})
+// 	return fn, requests
+// }
+
+// func StartTestManager(mgr manager.Manager, g *gomega.GomegaWithT) (chan struct{}, *sync.WaitGroup) {
+// 	stop := make(chan struct{})
+// 	wg := &sync.WaitGroup{}
+// 	go func() {
+// 		wg.Add(1)
+// 		g.Expect(mgr.Start(stop)).NotTo(gomega.HaveOccurred())
+// 		wg.Done()
+// 	}()
+// 	return stop, wg
+// }

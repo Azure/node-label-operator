@@ -176,7 +176,7 @@ func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.Virtu
 	return vmss
 }
 
-// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;create;update;patch;delete
+// +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes/status,verbs=get
 
@@ -186,7 +186,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
-	optionsNamespacedName := types.NamespacedName{Name: "node-label-operator", Namespace: "default"} // is this okay
+	optionsNamespacedName := types.NamespacedName{Name: "node-label-operator", Namespace: "node-label-operator-system"} // is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
 		// should I allow this to continue? It would be unfortunate to have things sync and then clean it up
