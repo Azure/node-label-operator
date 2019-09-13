@@ -398,6 +398,6 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&corev1.Node{}).
+		// For(&corev1.Node{}).
 		Complete(r)
 }

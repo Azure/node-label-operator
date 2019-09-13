@@ -25,7 +25,7 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
         export AZURE_CLIENT_ID=
         export AZURE_CLIENT_SECRET=
         ```
-2. Set up the Kubernetes ConfigMap. `kubectl apply -f samples/configmap.yaml`. If you don't, default settings will be used.
+2. Set up the Kubernetes ConfigMap. It must be named 'node-label-controller' and have namespace 'node-label-controller-system' to allow to controller to watch it in addition to nodes. `kubectl apply -f samples/configmap.yaml`. If you don't, default settings will be used.
     1. `syncDirection`
     2. `labelPrefix`
     3. `tagPrefix`
@@ -33,6 +33,11 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
     5. `resourceGroupFilter`
 3. You can edit `config/manager/manager.yaml`. `sync-period`.
 4. Run `make` to build the controller, then `make run` to run the controller on your cluster.
+
+## Other Pages (coming soon)
+
+- Setting up aad-pod-identity with user-assigned MSI
+- Debugging?
 
 ## Contributing
 
