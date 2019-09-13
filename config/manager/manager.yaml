@@ -24,26 +24,6 @@ spec:
         aadpodidbinding: node-label-operator
     spec:
       containers:
-      - name: demo
-        image: "mcr.microsoft.com/k8s/aad-pod-identity/demo:1.2"
-        imagePullPolicy: Always
-        args:
-          - "--subscriptionid=8643025a-c059-4a48-85d0-d76f51d63a74"
-          - "--clientid=9f0309e1-12a6-4ed5-b5ea-c7674c3f41b4"
-          - "--resourcegroup=bc335a62-4f85-4838-9890-41f9c066be4b"
-        env:
-        - name: MY_POD_NAME
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.name
-        - name: MY_POD_NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: MY_POD_IP
-          valueFrom:
-            fieldRef:
-              fieldPath: status.podIP
       - command:
         - /manager
         args:

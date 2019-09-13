@@ -10,6 +10,7 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/go-logr/logr"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -182,22 +183,11 @@ func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.Virtu
 // +kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=core,resources=nodes/status,verbs=get
+// +kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch
 
 func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result, error) {
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
-
-	config, err := Debug()
-	if err != nil {
-		log.Error(err, "failed to get AzureConfig using azure.json")
-	}
-	log.V(0).Info("AzureConfig", "subscriptionID", config.SubscriptionID, "resourceGroup", config.ResourceGroupName, "tenantID", config.TenantID)
-	spt, err := DebugMSIToken()
-	if err != nil {
-		log.Error(err, "failed to get MSI token")
-		return ctrl.Result{}, err
-	}
-	log.V(0).Info("MSI ServicePrincipalToken", "Token", spt.Token())
 
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
@@ -214,34 +204,64 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 			return ctrl.Result{}, err
 		}
 	}
+	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
 
-	var node corev1.Node
-	if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
-		log.Error(err, "unable to fetch Node")
+	var nodes corev1.NodeList
+	if err := r.List(r.ctx, &nodes); err != nil {
+		log.Error(err, "unable to fetch NodeList")
 		return ctrl.Result{}, err // what should I return here?
 	}
-	log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
-	provider, err := azure.ParseProviderID(node.Spec.ProviderID)
-	if err != nil {
-		log.Error(err, "invalid provider ID")
-	}
+	// var node corev1.Node
+	// if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
+	// 	log.Error(err, "unable to fetch Node")
+	// 	return ctrl.Result{}, err // what should I return here?
+	// }
+	// log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
+	// provider, err := azure.ParseProviderID(node.Spec.ProviderID)
+	// if err != nil {
+	// 	log.Error(err, "invalid provider ID")
+	// }
 
-	switch provider.ResourceType {
-	case VMSS:
-		// Add VMSS tags to node
-		if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
-			log.Error(err, "failed to apply tags to nodes")
-			return reconcile.Result{}, err
+	for _, node := range nodes.Items {
+		log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
+		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
+		if err != nil {
+			log.Error(err, "invalid provider ID")
 		}
-	case VM:
-		// Add VM tags to node
-		if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
-			log.Error(err, "failed to apply tags to nodes")
-			return reconcile.Result{}, err
+
+		switch provider.ResourceType {
+		case VMSS:
+			// Add VMSS tags to node
+			if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
+				log.Error(err, "failed to apply tags to nodes")
+				return reconcile.Result{}, err
+			}
+		case VM:
+			// Add VM tags to node
+			if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
+				log.Error(err, "failed to apply tags to nodes")
+				return reconcile.Result{}, err
+			}
+		default:
+			log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 		}
-	default:
-		log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 	}
+	// switch provider.ResourceType {
+	// case VMSS:
+	// 	// Add VMSS tags to node
+	// 	if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
+	// 		log.Error(err, "failed to apply tags to nodes")
+	// 		return reconcile.Result{}, err
+	// 	}
+	// case VM:
+	// 	// Add VM tags to node
+	// 	if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
+	// 		log.Error(err, "failed to apply tags to nodes")
+	// 		return reconcile.Result{}, err
+	// 	}
+	// default:
+	// 	log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
+	// }
 
 	return ctrl.Result{}, nil
 }
@@ -399,5 +419,6 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		// For(&corev1.Node{}).
+		For(&appsv1.Deployment{}).
 		Complete(r)
 }

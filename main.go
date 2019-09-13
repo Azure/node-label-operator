@@ -79,7 +79,7 @@ func main() {
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("node-label-operator"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller")
+		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)
 	}
 	setupLog.Info("successfully registered controller")
