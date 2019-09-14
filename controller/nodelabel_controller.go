@@ -191,8 +191,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
-	// optionsNamespacedName := types.NamespacedName{Name: "node-label-operator", Namespace: "node-label-operator-system"} // is this okay
-	optionsNamespacedName := OptionsConfigMapNamespacedName()
+	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
 		// should I allow this to continue? It would be unfortunate to have things sync and then clean it up
@@ -222,13 +221,20 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	// 	log.Error(err, "invalid provider ID")
 	// }
 
+	// check resource group? I still don't understand why nodes would be in different resource groups
 	for _, node := range nodes.Items {
 		log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
 		if err != nil {
 			log.Error(err, "invalid provider ID")
 		}
+		if configOptions.ResourceGroupFilter != DefaultResourceGroupFilter &&
+			provider.ResourceGroup != configOptions.ResourceGroupFilter {
+			log.V(1).Info("found node not in resource group filter", "resource group filter", configOptions.ResourceGroupFilter, "node", node.Name)
+			continue
+		}
 
+		// do I also remove tags that have been deleted?
 		switch provider.ResourceType {
 		case VMSS:
 			// Add VMSS tags to node
