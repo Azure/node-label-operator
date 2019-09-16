@@ -1,4 +1,5 @@
-module node-label-operator.io
+// module node-label-operator.io
+module github.com/Azure/node-label-operator
 
 go 1.12
 

@@ -20,7 +20,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"node-label-operator.io/azure"
+	"github.com/Azure/node-label-operator/azure"
 )
 
 const (
