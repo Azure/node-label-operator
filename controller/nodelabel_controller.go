@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/go-logr/logr"
@@ -200,7 +201,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		configOptions, err = NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
 		if err != nil {
 			log.Error(err, "failed to load options from config file")
-			return ctrl.Result{}, err
+			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
 	}
 	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
@@ -208,7 +209,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	var nodes corev1.NodeList
 	if err := r.List(r.ctx, &nodes); err != nil {
 		log.Error(err, "unable to fetch NodeList")
-		return ctrl.Result{}, err // what should I return here?
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil // what should I return here?
 	}
 	// var node corev1.Node
 	// if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
@@ -240,13 +241,13 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 			// Add VMSS tags to node
 			if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
 				log.Error(err, "failed to apply tags to nodes")
-				return reconcile.Result{}, err
+				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 			}
 		case VM:
 			// Add VM tags to node
 			if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
 				log.Error(err, "failed to apply tags to nodes")
-				return reconcile.Result{}, err
+				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 			}
 		default:
 			log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
