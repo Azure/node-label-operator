@@ -1,0 +1,7 @@
+apiVersion: nodelabel.azure.com/v1
+kind: NodeLabel
+metadata:
+  name: nodelabel-sample
+spec:
+  # Add fields here
+  foo: bar
