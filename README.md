@@ -32,7 +32,7 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
     4. `conflictPolicy`
     5. `resourceGroupFilter`
 3. You can edit `config/manager/manager.yaml`. `sync-period`.
-4. Run `make` to build the controller, then `make run` to run the controller on your cluster.
+4. To run the controller locally, run `make` to build the controller, then `make run` to run the controller on your cluster. To deploy the controller in your cluster, run `make docker-build docker-push` and `make deploy`.
 
 ## Other Pages (coming soon)
 

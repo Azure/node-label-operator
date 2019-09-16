@@ -29,7 +29,7 @@ import (
 
 	// +kubebuilder:scaffold:imports
 
-	"node-label-operator.io/controller"
+	"github.com/Azure/node-label-operator/controller"
 )
 
 var (
