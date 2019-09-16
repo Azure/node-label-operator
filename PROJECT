@@ -1,3 +1,7 @@
 version: "2"
 domain: azure.com
-repo: github.com/shanalily/initial-node-label-operator
+repo: github.com/Azure/node-label-operator
+resources:
+- group: nodelabel
+  version: v1
+  kind: NodeLabel
