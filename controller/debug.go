@@ -26,7 +26,7 @@ func NewCloudProvider(configFile string) (c *config.AzureConfig, e error) {
 	return &azureConfig, nil
 }
 
-func Debug() (*config.AzureConfig, error) {
+func DebugJSONvsYAML() (*config.AzureConfig, error) {
 	path := os.Getenv("HOME") + "/.azure/personal/azure.json"
 	config, err := NewCloudProvider(path)
 	if err != nil {

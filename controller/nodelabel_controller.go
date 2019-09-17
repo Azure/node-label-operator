@@ -36,6 +36,8 @@ type ReconcileNodeLabel struct {
 	ctx      context.Context
 }
 
+// ComputeResource is a compute resource such as a Virtual Machine that
+// should have its labels propagated to nodes running on the compute resource
 type ComputeResource interface {
 	// Get(ctx context.Context, name string) (azure.Spec, error)
 	Update(ctx context.Context) error
@@ -116,7 +118,6 @@ type VirtualMachineScaleSet struct {
 	vmss   *compute.VirtualMachineScaleSet
 }
 
-// I'm not sure this is actually modifying the client :(
 func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachineScaleSet, error) {
 	client, err := azure.NewScaleSetClient(subscriptionID)
 	if err != nil {
@@ -168,7 +169,6 @@ func (m VirtualMachineScaleSet) Tags() map[string]*string {
 	return m.vmss.Tags
 }
 
-// is this actually being set? deep or shallow copy?
 func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
 	m.vmss.Tags[name] = value
 }
@@ -211,18 +211,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.Error(err, "unable to fetch NodeList")
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
-	// var node corev1.Node
-	// if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
-	// 	log.Error(err, "unable to fetch Node")
-	// 	return ctrl.Result{}, err // what should I return here?
-	// }
-	// log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
-	// provider, err := azure.ParseProviderID(node.Spec.ProviderID)
-	// if err != nil {
-	// 	log.Error(err, "invalid provider ID")
-	// }
 
-	// check resource group? I still don't understand why nodes would be in different resource groups
 	for _, node := range nodes.Items {
 		log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
@@ -254,22 +243,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 			log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 		}
 	}
-	// switch provider.ResourceType {
-	// case VMSS:
-	// 	// Add VMSS tags to node
-	// 	if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
-	// 		log.Error(err, "failed to apply tags to nodes")
-	// 		return reconcile.Result{}, err
-	// 	}
-	// case VM:
-	// 	// Add VM tags to node
-	// 	if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
-	// 		log.Error(err, "failed to apply tags to nodes")
-	// 		return reconcile.Result{}, err
-	// 	}
-	// default:
-	// 	log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
-	// }
 
 	return ctrl.Result{}, nil
 }
@@ -298,7 +271,6 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 		if err != nil {
 			return err
 		}
-		// I shouldn't just be updating no matter what... not if arm-to-node
 		if err = updatedVMSS.Update(r.ctx); err != nil {
 			return err
 		}
@@ -337,8 +309,6 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	return nil
 }
 
-// is it a problem that I have r.Recorder and I'm trying to unit test this with sorta fake reconciler?
-// maybe return bool for updating?
 func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (*corev1.Node, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
@@ -378,7 +348,6 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	return node, nil
 }
 
-// I need to make sure I can get update to work with ComputeResource interface! value vs reference issue
 func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (ComputeResource, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(1).Info("configOptions", "sync direction", configOptions.SyncDirection)
@@ -390,7 +359,6 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 
 	for labelName, labelVal := range node.Labels {
 		if !ValidTagName(labelName, configOptions) {
-			// log.Error(errors.New(fmt.Sprintf("invalid tag name")), fmt.Sprintf("label name: %s", labelName))
 			log.V(0).Info("invalid tag name", "label name", labelName)
 			continue
 		}
@@ -424,6 +392,7 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	return computeResource, nil
 }
 
+// currently watching deployments because watching nodes results in reconciling too frequently
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		// For(&corev1.Node{}).
