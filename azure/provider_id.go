@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT license.
+
 // example: azure:///subscriptions/8643025a-c059-4a48-85d0-d76f51d63a74/resourceGroups/shoshanargwestus2/providers/Microsoft.Compute/virtualMachineScaleSets/default-9c6ddaaa-f207fc77/virtualMachines/3
 
 package azure
@@ -6,7 +9,6 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
-	// "github.com/Azure/go-autorest/autorest/azure"
 )
 
 type Resource struct {
@@ -18,7 +20,6 @@ type Resource struct {
 }
 
 func ParseProviderID(providerID string) (Resource, error) {
-	// return azure.ParseResourceID(providerID)
 	return parseResourceID(providerID)
 }
 
@@ -35,7 +36,6 @@ func parseResourceID(resourceID string) (Resource, error) {
 	}
 
 	v := strings.Split(match[5], "/")
-	// resourceName := v[len(v)-1]
 	resourceName := v[len(v)-3]
 
 	result := Resource{

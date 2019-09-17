@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation. All rights reserved.
+// Licensed under the MIT license.
+
 package controller
 
 import (
@@ -95,8 +98,13 @@ func tagWithPrefix(tagName, prefix string) string {
 	return fmt.Sprintf("%s-%s", prefix, tagName)
 }
 
+// what character should I use?
 func tagWithoutPrefix(tagName, prefix string) string {
-	return ""
+	if strings.HasPrefix(tagName, fmt.Sprintf("%s-", prefix)) {
+		return strings.TrimPrefix(tagName, fmt.Sprintf("%s-", prefix))
+	}
+	return tagName
+
 }
 
 func validTagName(labelName string) bool {
@@ -113,7 +121,7 @@ func validLabelName(tagName string) bool {
 	if len(tagName) > maxTagNameLen {
 		return false
 	}
-	re := regexp.MustCompile("^[a-zA-Z0-9_-.]*$")
+	re := regexp.MustCompile("^[a-zA-Z0-9_.-]*$")
 	if !re.MatchString(tagName) {
 		return false
 	}
