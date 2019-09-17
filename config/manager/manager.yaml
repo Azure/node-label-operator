@@ -27,6 +27,7 @@ spec:
         - /manager
         args:
         - --enable-leader-election
+        - --sync-period 10h
         image: controller:latest
         name: manager
         resources:

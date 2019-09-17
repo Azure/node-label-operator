@@ -1,8 +1,6 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
-# Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
-CRD_OPTIONS ?= "crd:trivialVersions=true"
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -14,8 +12,8 @@ endif
 all: manager
 
 # Run tests
-test: generate fmt vet manifests
-	go test ./api/... ./controllers/... -coverprofile cover.out
+test: generate fmt vet
+	go test ./controller/... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet
@@ -25,13 +23,8 @@ manager: generate fmt vet
 run: generate fmt vet
 	go run ./main.go
 
-# Install CRDs into a cluster
-install: manifests
-	kubectl apply -f config/crd/bases
-
 # Deploy controller in the configured Kubernetes cluster in ~/.kube/config
 deploy: manifests
-	kubectl apply -f config/crd/bases
 	kustomize build config/default | kubectl apply -f -
 
 # Generate manifests e.g. CRD, RBAC etc.
