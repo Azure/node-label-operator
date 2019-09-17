@@ -234,55 +234,55 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	}
 }
 
-// func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
-// 	var vals = [2]string{"banana", "broccoli"}
-// 	var nodeLabelsTest = []struct {
-// 		name         string
-// 		labels       map[string]string
-// 		tags         map[string]*string
-// 		expectedTags map[string]*string
-// 	}{
-// 		{
-// 			"resource1",
-// 			map[string]string{"favfruit": vals[0], "favveg": vals[1]},
-// 			map[string]*string{},
-// 			map[string]*string{"favfruit": &vals[0], "favveg": &vals[1]},
-// 		},
-// 	}
+func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
+	var vals = [2]string{"banana", "broccoli"}
+	var nodeLabelsTest = []struct {
+		name         string
+		labels       map[string]string
+		tags         map[string]*string
+		expectedTags map[string]*string
+	}{
+		{
+			"resource1",
+			map[string]string{"favfruit": vals[0], "favveg": vals[1]},
+			map[string]*string{},
+			map[string]*string{"favfruit": &vals[0], "favveg": &vals[1]},
+		},
+	}
 
-// 	config := DefaultConfigOptions()
-// 	config.SyncDirection = NodeToARM
-// 	config.ConflictPolicy = NodePrecedence
-// 	r := defaultNodeLabelReconciler()
-// 	computeResource := NewFakeComputeResource()
+	config := DefaultConfigOptions()
+	config.SyncDirection = NodeToARM
+	config.ConflictPolicy = NodePrecedence
+	r := defaultNodeLabelReconciler()
+	computeResource := NewFakeComputeResource()
 
-// 	// create a fake ComputeResource and fake Node for each test and use those I guess
-// 	for _, tt := range nodeLabelsTest {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			// computeResource.tags = tt.tags // is something weird going on here?
-// 			for k, v := range tt.tags {
-// 				computeResource.tags[k] = v
-// 			}
-// 			node := newTestNode(tt.name, tt.labels)
+	// create a fake ComputeResource and fake Node for each test and use those I guess
+	for _, tt := range nodeLabelsTest {
+		t.Run(tt.name, func(t *testing.T) {
+			// computeResource.tags = tt.tags // is something weird going on here?
+			for k, v := range tt.tags {
+				computeResource.tags[k] = v
+			}
+			node := newTestNode(tt.name, tt.labels)
 
-// 			_, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
-// 			if err != nil {
-// 				t.Errorf("failed to apply labels to azure resources: %q", err)
-// 			}
+			_, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
+			if err != nil {
+				t.Errorf("failed to apply labels to azure resources: %q", err)
+			}
 
-// 			for k, vptr := range tt.expectedTags {
-// 				// why is it always broccoli???
-// 				valptr, ok := computeResource.Tags()[k]
-// 				assert.True(t, ok)
-// 				fmt.Println(k, *vptr, *valptr)
-// 				v := *vptr
-// 				val := *valptr
-// 				assert.Equal(t, v, val)
-// 			}
+			for k, vptr := range tt.expectedTags {
+				// why is it always broccoli???
+				valptr, ok := computeResource.Tags()[k]
+				assert.True(t, ok)
+				fmt.Println(k, *vptr, *valptr)
+				v := *vptr
+				val := *valptr
+				assert.Equal(t, v, val)
+			}
 
-// 		})
-// 	}
-// }
+		})
+	}
+}
 
 func newTestK8sClient() kubernetes.Interface {
 	return fake.NewSimpleClientset()
