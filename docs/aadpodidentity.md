@@ -1,3 +1,5 @@
+Note: don't trust anything in this doc yet! :) still a work in progress
+
 # User-Assigned Pod Identity
 
 This assumes you have already created an Azure Identity, perhaps by using `az identity create`.
