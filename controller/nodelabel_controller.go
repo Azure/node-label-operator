@@ -5,6 +5,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -260,7 +261,11 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 		if err != nil {
 			return err
 		}
-		if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
+		patch, err := labelPatch(updatedNode.Labels)
+		if err != nil {
+			return err
+		}
+		if err = r.Patch(r.ctx, updatedNode, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
 			return err
 		}
 	}
@@ -291,7 +296,11 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 		if err != nil {
 			return err
 		}
-		if err = r.Update(r.ctx, updatedNode); err != nil { // should this be a patch?
+		patch, err := labelPatch(updatedNode.Labels)
+		if err != nil {
+			return err
+		}
+		if err = r.Patch(r.ctx, updatedNode, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
 			return err
 		}
 	}
@@ -390,6 +399,14 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	}
 
 	return computeResource, nil
+}
+
+func labelPatch(labels map[string]string) ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": labels,
+		},
+	})
 }
 
 // currently watching deployments because watching nodes results in reconciling too frequently
