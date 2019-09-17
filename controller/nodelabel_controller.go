@@ -209,7 +209,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	var nodes corev1.NodeList
 	if err := r.List(r.ctx, &nodes); err != nil {
 		log.Error(err, "unable to fetch NodeList")
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil // what should I return here?
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 	// var node corev1.Node
 	// if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
@@ -228,6 +228,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
 		if err != nil {
 			log.Error(err, "invalid provider ID")
+			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
 		if configOptions.ResourceGroupFilter != DefaultResourceGroupFilter &&
 			provider.ResourceGroup != configOptions.ResourceGroupFilter {
