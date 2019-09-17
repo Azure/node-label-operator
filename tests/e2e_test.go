@@ -19,7 +19,6 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	for i, key := range keys {
 		tags[key] = &values[i]
 	}
-	// tags := map[string]string{keys[0]: &values[0], keys[1]: &values[1], "fruit3": &values[2]}
 
 	// get tags
 	vmssClient, err := azure.NewScaleSetClient(s.SubscriptionID)
@@ -55,7 +54,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	}
 
 	// wait
-	// how long?
+	// how long? like 5 minutes? how long is reconcile expected to take?
 
 	// check that nodes now have accurate labels
 	for _, node := range nodeList.Items {
@@ -84,7 +83,18 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	}
 
 	// clean up nodes
+	for key, _ := range tags {
+		// delete from every node
+		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
+		for _, node := range nodeList.Items {
+			_, ok := node.Labels[validLabelName]
+			assert.True(s.T(), ok)
+			delete(node.Labels, validLabelName)
+		}
+	}
+
 	for _, _ = range nodeList.Items {
+		// update somehow??
 	}
 }
 
