@@ -273,6 +273,7 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 			for k, vptr := range tt.expectedTags {
 				// why is it always broccoli???
 				valptr, ok := computeResource.Tags()[k]
+				fmt.Println(k, *vptr, *valptr)
 				assert.True(t, ok)
 				fmt.Println(k, *vptr, *valptr)
 				v := *vptr
