@@ -128,7 +128,7 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 		return VirtualMachineScaleSet{}, err
 	}
 
-	vmss = VMSSUserAssignedIdentity(vmss)
+	// vmss = VMSSUserAssignedIdentity(vmss)
 
 	return VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
 }
