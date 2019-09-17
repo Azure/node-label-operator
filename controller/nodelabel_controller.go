@@ -117,8 +117,6 @@ type VirtualMachineScaleSet struct {
 	group  string
 	client *compute.VirtualMachineScaleSetsClient
 	vmss   *compute.VirtualMachineScaleSet
-	// client *scalesets.Client
-	// vmss   *scalesets.Spec
 }
 
 func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachineScaleSet, error) {
