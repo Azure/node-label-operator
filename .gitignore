@@ -13,4 +13,7 @@
 *.out
 
 private/
+<<<<<<< HEAD
 controller/suite_test.go
+=======
+>>>>>>> fixed user assigned identity issue
