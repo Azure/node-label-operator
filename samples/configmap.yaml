@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+    name: node-label-operator 
+    namespace: node-label-operator-system 
+data:
+    labelPrefix: "azure.tags"
+    tagPrefix: ""
+    conflictPolicy: "ignore"
+    syncDirection: "two-way"
+    resourceGroup: "shoshanargwestus2"
