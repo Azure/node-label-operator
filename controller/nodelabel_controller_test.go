@@ -11,34 +11,32 @@ import (
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/kubernetes/fake"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-type fakeComputeResource struct {
+type FakeComputeResource struct {
 	tags map[string]*string
 }
 
-func NewFakeComputeResource() fakeComputeResource {
-	return fakeComputeResource{tags: map[string]*string{}}
+func NewFakeComputeResource() FakeComputeResource {
+	return FakeComputeResource{tags: map[string]*string{}}
 }
 
-// func (c fakeComputeResource) Get(ctx context.Context, name string) (azure.Spec, error) {
-// 	return fakeSpec{}, nil
+// func (c FakeComputeResource) Get(ctx context.Context, name string) (FakeComputeResource, error) {
+// 	return c, nil
 // }
 
-func (c fakeComputeResource) Update(ctx context.Context) error {
+func (c FakeComputeResource) Update(ctx context.Context) error {
 	return nil
 }
 
-func (c fakeComputeResource) Tags() map[string]*string {
+func (c FakeComputeResource) Tags() map[string]*string {
 	return c.tags
 }
 
-func (c fakeComputeResource) SetTag(name string, value *string) {
+func (c FakeComputeResource) SetTag(name string, value *string) {
 	c.tags[name] = value
 }
 
@@ -200,16 +198,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 
 	config := DefaultConfigOptions() // tag-to-node only
 
-	// k8sClient := newTestK8sClient()
-	// nodes := k8sClient.CoreV1().Nodes()
-
-	// _, err := nodes.Create(newTestNode(name, nil))
-	// if err != nil {
-	// 	t.Errorf("creating fake node failed: %q", err)
-	// }
-	// node := nodes.Get("testNode", metav1.GetOptions{})
-
-	r := defaultNodeLabelReconciler()
+	r := NewFakeNodeLabelReconciler()
 	computeResource := NewFakeComputeResource()
 
 	for _, tt := range armTagsTest {
@@ -235,7 +224,11 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 }
 
 func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
-	var vals = [2]string{"banana", "broccoli"}
+	labels1 := map[string]string{"favfruit": "banana", "favveg": "broccoli"}
+	tags1 := map[string]*string{}
+	for key, val := range labels1 {
+		tags1[key] = &val
+	}
 	var nodeLabelsTest = []struct {
 		name         string
 		labels       map[string]string
@@ -244,49 +237,87 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 	}{
 		{
 			"resource1",
-			map[string]string{"favfruit": vals[0], "favveg": vals[1]},
+			labels1,
 			map[string]*string{},
-			map[string]*string{"favfruit": &vals[0], "favveg": &vals[1]},
+			labelMapToTagMap(labels1),
 		},
 	}
 
 	config := DefaultConfigOptions()
 	config.SyncDirection = NodeToARM
 	config.ConflictPolicy = NodePrecedence
-	r := defaultNodeLabelReconciler()
+	r := NewFakeNodeLabelReconciler()
 	computeResource := NewFakeComputeResource()
 
 	// create a fake ComputeResource and fake Node for each test and use those I guess
 	for _, tt := range nodeLabelsTest {
 		t.Run(tt.name, func(t *testing.T) {
-			// computeResource.tags = tt.tags // is something weird going on here?
-			for k, v := range tt.tags {
-				computeResource.tags[k] = v
-			}
+			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
 
-			_, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
+			updatedComputeResource, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
 			if err != nil {
 				t.Errorf("failed to apply labels to azure resources: %q", err)
 			}
 
-			for k, vptr := range tt.expectedTags {
+			for k, expectedPtr := range tt.expectedTags {
 				// why is it always broccoli???
-				valptr, ok := computeResource.Tags()[k]
-				fmt.Println(k, *vptr, *valptr)
+				actualPtr, ok := updatedComputeResource.Tags()[k]
 				assert.True(t, ok)
-				fmt.Println(k, *vptr, *valptr)
-				v := *vptr
-				val := *valptr
-				assert.Equal(t, v, val)
+				fmt.Println(k, *expectedPtr, *actualPtr)
+				expected := *expectedPtr
+				actual := *actualPtr
+				assert.Equal(t, expected, actual)
 			}
 
 		})
 	}
 }
 
-func newTestK8sClient() kubernetes.Interface {
-	return fake.NewSimpleClientset()
+func TestLoadConfigOptionsFromConfigMap(t *testing.T) {
+	configMap := NewFakeConfigMap()
+	configOptions, err := loadConfigOptionsFromConfigMap(*configMap)
+	if err != nil {
+		t.Errorf("failed to load config options from config map: %q", err)
+	}
+	assert.Equal(t, TwoWay, configOptions.SyncDirection)
+	assert.Equal(t, UNSET, configOptions.TagPrefix)
+	assert.Equal(t, "", configOptions.LabelPrefix)
+}
+
+func TestDefaultConfigOptions(t *testing.T) {
+	configOptions := DefaultConfigOptions()
+	assert.Equal(t, DefaultTagPrefix, configOptions.TagPrefix)
+	assert.Equal(t, DefaultResourceGroupFilter, configOptions.ResourceGroupFilter)
+
+}
+
+func TestNewConfigOptions(t *testing.T) {
+	configMap := NewFakeConfigMap()
+	configOptions, err := NewConfigOptions(*configMap)
+	if err != nil {
+		t.Errorf("failed to load new config options from map: %q", err)
+	}
+	assert.Equal(t, TwoWay, configOptions.SyncDirection)
+	assert.Equal(t, DefaultTagPrefix, configOptions.TagPrefix)
+	assert.Equal(t, "", configOptions.LabelPrefix)
+
+}
+
+// test helper functions
+
+func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
+	return &ReconcileNodeLabel{
+		Client: ctrlfake.NewFakeClientWithScheme(scheme.Scheme),
+		Log:    ctrl.Log.WithName("test"),
+		ctx:    context.Background(),
+	}
+}
+
+func NewFakeConfigMap() *corev1.ConfigMap {
+	return &corev1.ConfigMap{
+		Data: map[string]string{"syncDirection": "two-way", "labelPrefix": ""},
+	}
 }
 
 func newTestNode(name string, labels map[string]string) *corev1.Node {
@@ -302,12 +333,12 @@ func defaultNamespacedName(name string) types.NamespacedName {
 	return types.NamespacedName{Name: name, Namespace: "default"}
 }
 
-func defaultNodeLabelReconciler() *ReconcileNodeLabel {
-	return &ReconcileNodeLabel{
-		Client: ctrlfake.NewFakeClientWithScheme(scheme.Scheme),
-		Log:    ctrl.Log.WithName("test"),
-		ctx:    context.Background(),
+func labelMapToTagMap(labels map[string]string) map[string]*string {
+	tags := map[string]*string{}
+	for key, val := range labels {
+		tags[key] = &val
 	}
+	return tags
 }
 
 // test authentication?
