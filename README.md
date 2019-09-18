@@ -36,7 +36,7 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
 
 ## Other Pages (coming soon)
 
-- Setting up aad-pod-identity with user-assigned MSI
+- [Setting up aad-pod-identity with user-assigned MSI](https://github.com/Azure/node-label-operator/blob/master/docs/aadpodidentity.md)
 - Debugging?
 
 ## Contributing
