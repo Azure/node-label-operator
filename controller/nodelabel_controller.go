@@ -52,19 +52,19 @@ type VirtualMachine struct {
 	vm     *compute.VirtualMachine
 }
 
-func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachine, error) {
+func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (*VirtualMachine, error) {
 	client, err := azure.NewVMClient(subscriptionID)
 	if err != nil {
-		return VirtualMachine{}, err
+		return nil, err
 	}
 	vm, err := client.Get(ctx, resourceGroup, resourceName, compute.InstanceView)
 	if err != nil {
-		return VirtualMachine{}, err
+		return nil, err
 	}
 
 	vm = VMUserAssignedIdentity(vm)
 
-	return VirtualMachine{group: resourceGroup, client: &client, vm: &vm}, nil
+	return &VirtualMachine{group: resourceGroup, client: &client, vm: &vm}, nil
 }
 
 func (m VirtualMachine) Get(ctx context.Context, name string) (compute.VirtualMachine, error) {
@@ -106,9 +106,11 @@ func (m VirtualMachine) SetTag(name string, value *string) {
 }
 
 func VMUserAssignedIdentity(vm compute.VirtualMachine) compute.VirtualMachine {
-	vm.Identity.Type = compute.ResourceIdentityTypeUserAssigned
-	for id, _ := range vm.Identity.UserAssignedIdentities {
-		vm.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineIdentityUserAssignedIdentitiesValue{}
+	if vm.Identity != nil {
+		vm.Identity.Type = compute.ResourceIdentityTypeUserAssigned
+		for id, _ := range vm.Identity.UserAssignedIdentities {
+			vm.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineIdentityUserAssignedIdentitiesValue{}
+		}
 	}
 	return vm
 }
@@ -119,19 +121,19 @@ type VirtualMachineScaleSet struct {
 	vmss   *compute.VirtualMachineScaleSet
 }
 
-func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (VirtualMachineScaleSet, error) {
+func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName string) (*VirtualMachineScaleSet, error) {
 	client, err := azure.NewScaleSetClient(subscriptionID)
 	if err != nil {
-		return VirtualMachineScaleSet{}, err
+		return nil, err
 	}
 	vmss, err := client.Get(ctx, resourceGroup, resourceName)
 	if err != nil {
-		return VirtualMachineScaleSet{}, err
+		return nil, err
 	}
 
-	// vmss = VMSSUserAssignedIdentity(vmss)
+	vmss = VMSSUserAssignedIdentity(vmss)
 
-	return VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
+	return &VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
 }
 
 // find a way to actually use get??
@@ -175,9 +177,11 @@ func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
 }
 
 func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.VirtualMachineScaleSet {
-	vmss.Identity.Type = compute.ResourceIdentityTypeUserAssigned
-	for id, _ := range vmss.Identity.UserAssignedIdentities {
-		vmss.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
+	if vmss.Identity != nil { // is this an error otherwise?
+		vmss.Identity.Type = compute.ResourceIdentityTypeUserAssigned
+		for id, _ := range vmss.Identity.UserAssignedIdentities {
+			vmss.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
+		}
 	}
 	return vmss
 }
@@ -196,7 +200,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
-		// should I allow this to continue? It would be unfortunate to have things sync and then clean it up
+		// I should create actual configmap here (not just this struct) so that it can be found in future
 		configOptions = DefaultConfigOptions()
 	} else {
 		configOptions, err = NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
@@ -217,7 +221,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
 		if err != nil {
-			log.Error(err, "invalid provider ID")
+			log.Error(err, "invalid provider ID", "node", node.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
 		if configOptions.ResourceGroupFilter != DefaultResourceGroupFilter &&
@@ -257,7 +261,8 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
-		updatedNode, err := r.applyTagsToNodes(namespacedName, vmss, node, configOptions)
+		// I should only update if there are changes to labels
+		updatedNode, err := r.applyTagsToNodes(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
 		}
@@ -272,7 +277,8 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 
 	// assign all labels on Node to VMSS, if not already there
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
-		updatedVMSS, err := r.applyLabelsToAzureResource(namespacedName, vmss, node, configOptions)
+		// I should only update if there are changes to labels
+		updatedVMSS, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
 		}
@@ -292,7 +298,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
-		updatedNode, err := r.applyTagsToNodes(namespacedName, vm, node, configOptions)
+		updatedNode, err := r.applyTagsToNodes(namespacedName, *vm, node, configOptions)
 		if err != nil {
 			return err
 		}
@@ -306,7 +312,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
-		updatedVM, err := r.applyLabelsToAzureResource(namespacedName, vm, node, configOptions)
+		updatedVM, err := r.applyLabelsToAzureResource(namespacedName, *vm, node, configOptions)
 		if err != nil {
 			return err
 		}
