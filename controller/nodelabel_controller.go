@@ -12,13 +12,14 @@ import (
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
 	"github.com/go-logr/logr"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/Azure/node-label-operator/azure"
@@ -418,7 +419,59 @@ func labelPatch(labels map[string]string) ([]byte, error) {
 // currently watching deployments because watching nodes results in reconciling too frequently
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// For(&corev1.Node{}).
-		For(&appsv1.Deployment{}).
+		For(&corev1.Node{}).
+		WithEventFilter(predicate.Funcs{
+			UpdateFunc:  updateFunc,
+			CreateFunc:  createFunc,
+			DeleteFunc:  deleteFunc,
+			GenericFunc: genericFunc,
+		}).
 		Complete(r)
+}
+
+// for predicate
+// but how can I quickly check for vmss tags :(
+
+func updateFunc(e event.UpdateEvent) bool {
+	oldNode, ok := e.ObjectOld.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	newNode, ok := e.ObjectNew.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	if len(oldNode.Labels) != len(newNode.Labels) {
+		return true
+	}
+	// how can I quickly tell if they're different? other than just size... in case one label is updated
+	// Will provider ID ever change? Is that helpful?
+	return false
+}
+
+func createFunc(e event.CreateEvent) bool {
+	node, ok := e.Object.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	if len(node.Labels) > 0 {
+		return true
+	}
+	return false
+}
+
+func deleteFunc(e event.DeleteEvent) bool {
+	// node, ok := e.Object.(*corev1.Node)
+	// if !ok {
+	// 	return false
+	// }
+	return true
+}
+
+func genericFunc(e event.GenericEvent) bool {
+	// node, ok := e.Object.(*corev1.Node)
+	// if !ok {
+	// 	return false
+	// }
+	return false
 }
