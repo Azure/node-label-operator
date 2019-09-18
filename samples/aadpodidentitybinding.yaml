@@ -1,0 +1,7 @@
+apiVersion: "aadpodidentity.k8s.io/v1"
+kind: AzureIdentityBinding
+metadata:
+    name: <binding-name> 
+spec:
+    AzureIdentity: "shoshanaidentity"
+    Selector: "<selector_name>"

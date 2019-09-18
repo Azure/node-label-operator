@@ -16,17 +16,31 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
-  replicas: 1
+  replicas: 2
   template:
     metadata:
       labels:
         control-plane: controller-manager
+        aadpodidbinding: node-label-operator
     spec:
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: node-role.kubernetes.io/master
+                operator: In
+                values:
+                - ""
+      tolerations:
+      - key: node-role.kubernetes.io/master
+        effect: NoSchedule
       containers:
       - command:
         - /manager
         args:
         - --enable-leader-election
+        - --sync-period 10h
         image: controller:latest
         name: manager
         resources:

@@ -1,19 +1,18 @@
 # Adds namespace to all resources.
-namespace: initial-node-label-operator-system
+namespace: node-label-operator-system
 
 # Value of this field is prepended to the
 # names of all resources, e.g. a deployment named
 # "wordpress" becomes "alices-wordpress".
 # Note that it should also match with the prefix (text before '-') of the namespace
 # field above.
-namePrefix: initial-node-label-operator-
+namePrefix: node-label-operator-
 
 # Labels to add to all resources and selectors.
 #commonLabels:
 #  someName: someValue
 
 bases:
-- ../crd
 - ../rbac
 - ../manager
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix including the one in crd/kustomization.yaml
