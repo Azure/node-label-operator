@@ -18,7 +18,7 @@ You will need to create the Kubernetes resource for AzureIdentity, AzureIdentity
 
 Create an AzureIdentity configuration file for each user-assigned identity.
 
-```
+```yaml
 apiVersion: "aadpodidentity.k8s.io/v1"
 kind: AzureIdentity
 metadata:
@@ -31,7 +31,7 @@ spec:
 
 Create an AzureIdentityBinding configuration file for AzureIdentity that you created. User selector 'node-label-operator'.
 
-```
+```yaml
 apiVersion: "aadpodidentity.k8s.io/v1"
 kind: AzureIdentityBinding
 metadata:
