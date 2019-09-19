@@ -38,7 +38,7 @@ type ReconcileNodeLabel struct {
 	Recorder    record.EventRecorder
 	ctx         context.Context
 	lock        sync.Mutex
-	lastUpdated map[string]time.Time // time each node was last updated
+	LastUpdated map[string]time.Time // time each node was last updated
 }
 
 // ComputeResource is a compute resource such as a Virtual Machine that
@@ -201,7 +201,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 
 	// check last updated, if updated too recently then wait
 	fiveMinutesAgo := time.Now().Add(time.Minute * time.Duration(-5))
-	updateTimestamp, ok := r.lastUpdated[req.Name]
+	updateTimestamp, ok := r.LastUpdated[req.Name]
 	if ok && !updateTimestamp.Before(fiveMinutesAgo) {
 		return ctrl.Result{}, nil
 	}
@@ -266,6 +266,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 	}
 
+	r.SetLastUpdated(req.NamespacedName.Name)
 	return ctrl.Result{}, nil
 }
 
@@ -287,7 +288,6 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 			if err = r.Patch(r.ctx, node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
 				return err
 			}
-			r.SetLastUpdated(namespacedName.Name)
 		}
 	}
 
@@ -327,7 +327,6 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 			if err = r.Patch(r.ctx, node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
 				return err
 			}
-			r.SetLastUpdated(namespacedName.Name)
 		}
 	}
 
@@ -421,15 +420,12 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 		if !ok {
 			// add label as tag
 			log.V(1).Info("applying labels to Azure resource", "labelName", labelName, "labelVal", labelVal)
-			// is  this causing the problem in my unit tests?
-			// computeResource.SetTag(validTagName, &labelVal)
 			newTags[validTagName] = &labelVal
 		} else if *tagVal != labelVal {
 			switch configOptions.ConflictPolicy {
 			case NodePrecedence:
 				// set tag anyway
 				log.V(1).Info("overriding existing ARM tag with node label", "labelName", labelName, "labelVal", labelVal)
-				// computeResource.SetTag(validTagName, &labelVal)
 				newTags[validTagName] = &labelVal
 			case ARMPrecedence:
 				// do nothing
@@ -475,7 +471,7 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	r.lastUpdated[nodeName] = time.Now()
+	r.LastUpdated[nodeName] = time.Now()
 }
 
 // for predicate
@@ -488,9 +484,6 @@ func updateFunc(e event.UpdateEvent) bool {
 }
 
 // somehow there's a ton of create events
-// is it an issue if I patch? does that show up as a create somehow?
-// it feels like I should be able to label any newly created node but for some reason it's
-// so many events
 func createFunc(e event.CreateEvent) bool {
 	return true
 }

@@ -99,6 +99,7 @@ func DefaultConfigOptions() ConfigOptions {
 	}
 }
 
+// ConfigMap -> ConfigOptions
 func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, error) {
 	data, err := json.Marshal(configMap.Data)
 	if err != nil {
@@ -113,6 +114,7 @@ func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, 
 	return configOptions, nil
 }
 
+// ConfigOptions -> ConfigMap
 func getConfigMapFromConfigOptions(configOptions *ConfigOptions) (corev1.ConfigMap, error) {
 	b, err := json.Marshal(configOptions)
 	if err != nil {
