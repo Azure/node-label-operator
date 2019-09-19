@@ -263,16 +263,14 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
 		// I should only update if there are changes to labels
-		updatedNode, err := r.applyTagsToNodes(namespacedName, *vmss, node, configOptions)
+		patch, err := r.applyTagsToNodes(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
 		}
-		patch, err := labelPatch(updatedNode.Labels)
-		if err != nil {
-			return err
-		}
-		if err = r.Patch(r.ctx, updatedNode, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
-			return err
+		if patch != nil { // gross looking
+			if err = r.Patch(r.ctx, node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -299,16 +297,14 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
-		updatedNode, err := r.applyTagsToNodes(namespacedName, *vm, node, configOptions)
+		patch, err := r.applyTagsToNodes(namespacedName, *vm, node, configOptions)
 		if err != nil {
 			return err
 		}
-		patch, err := labelPatch(updatedNode.Labels)
-		if err != nil {
-			return err
-		}
-		if err = r.Patch(r.ctx, updatedNode, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
-			return err
+		if patch != nil {
+			if err = r.Patch(r.ctx, node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -325,11 +321,13 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	return nil
 }
 
-func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (*corev1.Node, error) {
+// return patch with new labels, if any, otherwise return nil for no new labels or an error
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
 	log.V(0).Info("configOptions", "tag prefix", configOptions.TagPrefix)
 
+	changed := false
 	for tagName, tagVal := range computeResource.Tags() {
 		if !ValidLabelName(tagName) {
 			log.V(0).Info("invalid label name", "tag name", tagName)
@@ -341,12 +339,14 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 			// add tag as label
 			log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
 			node.Labels[validLabelName] = *tagVal
+			changed = true
 		} else if labelVal != *tagVal {
 			switch configOptions.ConflictPolicy {
 			case ARMPrecedence:
 				// set label anyway
 				log.V(1).Info("overriding existing node label with ARM tag", "tagName", tagName, "tagVal", tagVal)
 				node.Labels[validLabelName] = *tagVal
+				changed = true
 			case NodePrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
@@ -356,12 +356,21 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 					fmt.Sprintf("ARM tag was not applied to node because a different value for '%s' already exists (%s != %s).", tagName, *tagVal, labelVal))
 				log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
 			default:
-				return node, errors.New("unrecognized conflict policy")
+				return nil, errors.New("unrecognized conflict policy")
 			}
 		}
 	}
 
-	return node, nil
+	if !changed { // to avoid unnecessary patching
+		return nil, nil
+	}
+
+	patch, err := labelPatch(node.Labels)
+	if err != nil {
+		return nil, err
+	}
+
+	return patch, nil
 }
 
 func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (ComputeResource, error) {
@@ -432,6 +441,7 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 // for predicate
 // but how can I quickly check for vmss tags :(
 
+// are updates going to create?
 func updateFunc(e event.UpdateEvent) bool {
 	oldNode, ok := e.ObjectOld.(*corev1.Node)
 	if !ok {
@@ -449,6 +459,8 @@ func updateFunc(e event.UpdateEvent) bool {
 	return false
 }
 
+// somehow there's a ton of create events
+// is it an issue if I patch? does that show up as a create somehow?
 func createFunc(e event.CreateEvent) bool {
 	node, ok := e.Object.(*corev1.Node)
 	if !ok {
@@ -465,7 +477,8 @@ func deleteFunc(e event.DeleteEvent) bool {
 	// if !ok {
 	// 	return false
 	// }
-	return true
+	// return true
+	return false
 }
 
 func genericFunc(e event.GenericEvent) bool {

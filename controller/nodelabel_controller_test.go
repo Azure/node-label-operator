@@ -207,8 +207,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
 
-			// I think r.Update() is causing issues still since I can't actually update...
-			// try/catch sort of thing in case the error is from trying to update?
+			// I should probably check the return value of patch :/
 			_, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
 			if err != nil {
 				t.Errorf("failed to apply tags to nodes: %q", err)
