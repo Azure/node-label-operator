@@ -254,14 +254,14 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
 
-			updatedComputeResource, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
+			tags, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
 			if err != nil {
 				t.Errorf("failed to apply labels to azure resources: %q", err)
 			}
 
 			for k, expectedPtr := range tt.expectedTags {
 				// why is it always broccoli???
-				actualPtr, ok := updatedComputeResource.Tags()[k]
+				actualPtr, ok := tags[k]
 				assert.True(t, ok)
 				fmt.Println(k, *expectedPtr, *actualPtr)
 				expected := *expectedPtr

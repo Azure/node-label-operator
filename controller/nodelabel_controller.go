@@ -277,12 +277,17 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 	// assign all labels on Node to VMSS, if not already there
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
 		// I should only update if there are changes to labels
-		updatedVMSS, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
+		tags, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
 		}
-		if err = updatedVMSS.Update(r.ctx); err != nil {
-			return err
+		if tags != nil {
+			for key, val := range tags {
+				vmss.SetTag(key, val)
+			}
+			if err = vmss.Update(r.ctx); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -309,12 +314,17 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
-		updatedVM, err := r.applyLabelsToAzureResource(namespacedName, *vm, node, configOptions)
+		tags, err := r.applyLabelsToAzureResource(namespacedName, *vm, node, configOptions)
 		if err != nil {
 			return err
 		}
-		if err = updatedVM.Update(r.ctx); err != nil {
-			return err
+		if tags != nil {
+			for key, val := range tags {
+				vm.SetTag(key, val)
+			}
+			if err = vm.Update(r.ctx); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -373,15 +383,16 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	return patch, nil
 }
 
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (ComputeResource, error) {
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 	log.V(1).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
 	if len(computeResource.Tags()) > maxNumTags {
 		log.V(0).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
-		return computeResource, nil
+		return computeResource.Tags(), nil
 	}
 
+	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
 		if !ValidTagName(labelName, configOptions) {
 			log.V(0).Info("invalid tag name", "label name", labelName)
@@ -393,13 +404,15 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 			// add label as tag
 			log.V(1).Info("applying labels to Azure resource", "labelName", labelName, "labelVal", labelVal)
 			// is  this causing the problem in my unit tests?
-			computeResource.SetTag(validTagName, &labelVal)
+			// computeResource.SetTag(validTagName, &labelVal)
+			newTags[validTagName] = &labelVal
 		} else if *tagVal != labelVal {
 			switch configOptions.ConflictPolicy {
 			case NodePrecedence:
 				// set tag anyway
 				log.V(1).Info("overriding existing ARM tag with node label", "labelName", labelName, "labelVal", labelVal)
-				computeResource.SetTag(validTagName, &labelVal)
+				// computeResource.SetTag(validTagName, &labelVal)
+				newTags[validTagName] = &labelVal
 			case ARMPrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
@@ -409,12 +422,16 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 					fmt.Sprintf("node label was not applied to Azure resource because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
 				log.V(0).Info("name->value conflict found, leaving unchanged", "label value", labelVal, "tag value", *tagVal)
 			default:
-				return computeResource, errors.New("unrecognized conflict policy")
+				return nil, errors.New("unrecognized conflict policy")
 			}
 		}
 	}
 
-	return computeResource, nil
+	if len(newTags) == 0 { // if unchanged
+		return nil, nil
+	}
+
+	return newTags, nil
 }
 
 func labelPatch(labels map[string]string) ([]byte, error) {
@@ -425,7 +442,6 @@ func labelPatch(labels map[string]string) ([]byte, error) {
 	})
 }
 
-// currently watching deployments because watching nodes results in reconciling too frequently
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&corev1.Node{}).
