@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Azure/azure-sdk-for-go/services/compute/mgmt/2019-03-01/compute"
@@ -32,10 +33,12 @@ const (
 
 type ReconcileNodeLabel struct {
 	client.Client
-	Log      logr.Logger
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	ctx      context.Context
+	Log         logr.Logger
+	Scheme      *runtime.Scheme
+	Recorder    record.EventRecorder
+	ctx         context.Context
+	lock        sync.Mutex
+	lastUpdated map[string]time.Time // time each node was last updated
 }
 
 // ComputeResource is a compute resource such as a Virtual Machine that
@@ -196,13 +199,29 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
+	// check last updated, if updated too recently then wait
+	fiveMinutesAgo := time.Now().Add(time.Minute * time.Duration(-5))
+	updateTimestamp, ok := r.lastUpdated[req.Name]
+	if ok && !updateTimestamp.Before(fiveMinutesAgo) {
+		return ctrl.Result{}, nil
+	}
+
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
 	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
-		// I should create actual configmap here (not just this struct) so that it can be found in future
-		configOptions = DefaultConfigOptions()
+		// create default options config map and requeue
+		configMap, err := NewDefaultConfigOptions()
+		if err != nil {
+			log.Error(err, "failed to get new default options configmap")
+			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+		}
+		if err := r.Create(r.ctx, configMap); err != nil {
+			log.Error(err, "failed to create new default options configmap")
+			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+		}
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil // do I return anything different?
 	} else {
 		configOptions, err = NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
 		if err != nil {
@@ -212,42 +231,39 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	}
 	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
 
-	var nodes corev1.NodeList
-	if err := r.List(r.ctx, &nodes); err != nil {
-		log.Error(err, "unable to fetch NodeList")
+	var node corev1.Node
+	if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
+		log.Error(err, "unable to fetch Node")
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
+	log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
+	provider, err := azure.ParseProviderID(node.Spec.ProviderID)
+	if err != nil {
+		log.Error(err, "invalid provider ID", "node", node.Name)
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+	if configOptions.ResourceGroupFilter != DefaultResourceGroupFilter &&
+		provider.ResourceGroup != configOptions.ResourceGroupFilter {
+		log.V(1).Info("found node not in resource group filter", "resource group filter", configOptions.ResourceGroupFilter, "node", node.Name)
+		return ctrl.Result{}, nil
+	}
 
-	for _, node := range nodes.Items {
-		log.V(1).Info("provider info", "provider ID", node.Spec.ProviderID)
-		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
-		if err != nil {
-			log.Error(err, "invalid provider ID", "node", node.Name)
+	// do I also remove tags that have been deleted?
+	switch provider.ResourceType {
+	case VMSS:
+		// Add VMSS tags to node
+		if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
+			log.Error(err, "failed to apply tags to nodes")
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
-		if configOptions.ResourceGroupFilter != DefaultResourceGroupFilter &&
-			provider.ResourceGroup != configOptions.ResourceGroupFilter {
-			log.V(1).Info("found node not in resource group filter", "resource group filter", configOptions.ResourceGroupFilter, "node", node.Name)
-			continue
+	case VM:
+		// Add VM tags to node
+		if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
+			log.Error(err, "failed to apply tags to nodes")
+			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
-
-		// do I also remove tags that have been deleted?
-		switch provider.ResourceType {
-		case VMSS:
-			// Add VMSS tags to node
-			if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
-				log.Error(err, "failed to apply tags to nodes")
-				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
-			}
-		case VM:
-			// Add VM tags to node
-			if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
-				log.Error(err, "failed to apply tags to nodes")
-				return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
-			}
-		default:
-			log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
-		}
+	default:
+		log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 	}
 
 	return ctrl.Result{}, nil
@@ -271,6 +287,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 			if err = r.Patch(r.ctx, node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
 				return err
 			}
+			r.SetLastUpdated(namespacedName.Name)
 		}
 	}
 
@@ -310,6 +327,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 			if err = r.Patch(r.ctx, node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
 				return err
 			}
+			r.SetLastUpdated(namespacedName.Name)
 		}
 	}
 
@@ -395,7 +413,7 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
 		if !ValidTagName(labelName, configOptions) {
-			log.V(0).Info("invalid tag name", "label name", labelName)
+			// log.V(1).Info("invalid tag name", "label name", labelName)
 			continue
 		}
 		validTagName := ConvertLabelNameToValidTagName(labelName, configOptions)
@@ -454,53 +472,34 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.lastUpdated[nodeName] = time.Now()
+}
+
 // for predicate
 // but how can I quickly check for vmss tags :(
 
 // are updates going to create?
+// true because node might have a new label I guess
 func updateFunc(e event.UpdateEvent) bool {
-	oldNode, ok := e.ObjectOld.(*corev1.Node)
-	if !ok {
-		return false
-	}
-	newNode, ok := e.ObjectNew.(*corev1.Node)
-	if !ok {
-		return false
-	}
-	if len(oldNode.Labels) != len(newNode.Labels) {
-		return true
-	}
-	// how can I quickly tell if they're different? other than just size... in case one label is updated
-	// Will provider ID ever change? Is that helpful?
-	return false
+	return true
 }
 
 // somehow there's a ton of create events
 // is it an issue if I patch? does that show up as a create somehow?
+// it feels like I should be able to label any newly created node but for some reason it's
+// so many events
 func createFunc(e event.CreateEvent) bool {
-	node, ok := e.Object.(*corev1.Node)
-	if !ok {
-		return false
-	}
-	if len(node.Labels) > 0 {
-		return true
-	}
-	return false
+	return true
 }
 
+// return true because vmss might need to be updated?
 func deleteFunc(e event.DeleteEvent) bool {
-	// node, ok := e.Object.(*corev1.Node)
-	// if !ok {
-	// 	return false
-	// }
-	// return true
-	return false
+	return true
 }
 
 func genericFunc(e event.GenericEvent) bool {
-	// node, ok := e.Object.(*corev1.Node)
-	// if !ok {
-	// 	return false
-	// }
 	return false
 }
