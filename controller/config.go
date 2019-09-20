@@ -6,6 +6,7 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,6 +16,7 @@ const (
 	DefaultLabelPrefix         string = "azure.tags"
 	DefaultTagPrefix           string = "node.labels"
 	DefaultResourceGroupFilter string = "none"
+	DefaultMinSyncPeriod       string = "5m"
 	UNSET                      string = "unset"
 )
 
@@ -35,11 +37,12 @@ const (
 )
 
 type ConfigOptions struct {
-	SyncDirection       SyncDirection  `json:"syncDirection"` // how do I validate this?
+	SyncDirection       SyncDirection  `json:"syncDirection"`
 	LabelPrefix         string         `json:"labelPrefix"`
 	TagPrefix           string         `json:"tagPrefix"`
 	ConflictPolicy      ConflictPolicy `json:"conflictPolicy"`
 	ResourceGroupFilter string         `json:"resourceGroupFilter"`
+	MinSyncPeriod       string         `json:"minSyncPeriod"`
 }
 
 func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
@@ -77,7 +80,22 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 		configOptions.ResourceGroupFilter = DefaultResourceGroupFilter
 	}
 
+	if configOptions.MinSyncPeriod == "" {
+		configOptions.MinSyncPeriod = DefaultMinSyncPeriod
+	} else if _, err = time.ParseDuration(configOptions.MinSyncPeriod); err != nil {
+		return ConfigOptions{}, err
+	}
+
 	return configOptions, nil
+}
+
+func NewDefaultConfigOptions() (*corev1.ConfigMap, error) {
+	configOptions := DefaultConfigOptions()
+	configMap, err := getConfigMapFromConfigOptions(&configOptions)
+	if err != nil {
+		return nil, err
+	}
+	return &configMap, nil
 }
 
 func DefaultConfigOptions() ConfigOptions {
@@ -87,9 +105,11 @@ func DefaultConfigOptions() ConfigOptions {
 		TagPrefix:           DefaultTagPrefix,
 		ConflictPolicy:      ARMPrecedence,
 		ResourceGroupFilter: DefaultResourceGroupFilter,
+		MinSyncPeriod:       DefaultMinSyncPeriod,
 	}
 }
 
+// ConfigMap -> ConfigOptions
 func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, error) {
 	data, err := json.Marshal(configMap.Data)
 	if err != nil {
@@ -102,6 +122,24 @@ func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, 
 	}
 
 	return configOptions, nil
+}
+
+// ConfigOptions -> ConfigMap
+func getConfigMapFromConfigOptions(configOptions *ConfigOptions) (corev1.ConfigMap, error) {
+	b, err := json.Marshal(configOptions)
+	if err != nil {
+		return corev1.ConfigMap{}, err
+	}
+
+	configMap := corev1.ConfigMap{}
+	if err := json.Unmarshal(b, &configMap.Data); err != nil {
+		return corev1.ConfigMap{}, nil
+	}
+	namespacedName := OptionsConfigMapNamespacedName()
+	configMap.Name = namespacedName.Name
+	configMap.Namespace = namespacedName.Namespace
+
+	return configMap, nil
 }
 
 func OptionsConfigMapNamespacedName() types.NamespacedName {

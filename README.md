@@ -33,8 +33,9 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
     3. `tagPrefix`
     4. `conflictPolicy`: The policy for conflicting tag/label values. ARM tags or node labels can be given priority. ARM tags have priority by default (`arm-precedence`). Another option is to not update tags and raise Kubernetes event (`ignore`) and `node-precedence`.
     5. `resourceGroupFilter`: The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1, RG2, RG3). Default is `none` for no filter. Otherwise, use name of (single) resource group.
-3. You can edit `config/manager/manager.yaml`. `sync-period`.
-4. To run the controller locally, run `make` to build the controller, then `make run` to run the controller on your cluster. To deploy the controller in your cluster, run `make docker-build docker-push` and `make deploy`.
+    6. `interval`: The minimum interval between updates to a node, in a format accepted by golang time library for Duration. Decimal numbers followed by time unit suffix. Valid time units are "ns", "us", "ms", "s", "m", "h". Ex: "300ms", "1.5h", or "2h45m".
+3. You can edit `config/manager/manager.yaml`. `sync-period` is the maximum time between calls to reconcile. The default is "10h".
+4. To run the controller locally, run `make` to build the controller, then `make run` to run the controller on your cluster. To deploy the controller in your cluster, make sure IMG is set and run `make docker-build docker-push` and `make deploy`.
 
 ## Other Pages (coming soon)
 

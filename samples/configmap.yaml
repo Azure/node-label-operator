@@ -6,6 +6,7 @@ metadata:
 data:
     labelPrefix: "azure.tags"
     tagPrefix: ""
-    conflictPolicy: "ignore"
+    conflictPolicy: "arm-precedence"
     syncDirection: "two-way"
     resourceGroup: "shoshanargwestus2"
+    minSyncPeriod: "1m"

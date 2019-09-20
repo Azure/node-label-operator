@@ -4,19 +4,19 @@ Note: don't trust anything in this doc yet! :) still a work in progress
 
 This assumes you have already created an Azure Identity, perhaps by using `az identity create`.
 
-Define "Contributor" roles for your resource group for each user-assigned identity in your cluster so that the AzureIdentity can be bound to your VM/VMSS.
-The controller runs on the controlplane/master nodes so specifically the controlplane identity.
+Define "Contributor" roles for your resource group for each user-assigned identity assigned to a VM/VMSS with master/controlplane nodes, which is where
+the controller will run.
 
 `az role assignment create --role "Contributor" --assignee <principalId> --scope <resource group>` 
 
-Define "Managed Identity Operator" roles for each user assigned identity.
+Define "Managed Identity Operator" roles for each user assigned identity assigned to a VM/VMSS with master/controlplane nodes.
 
 `az role assignment create --role "Managed Identity Operator" --assignee <principalId> --scope <resource ID of managed identity>`
 
 
-You will need to create the Kubernetes resource for AzureIdentity, AzureIdentityBinding, which will allow for the creation of AzureAssignedIdentity resources.
+You will need to create the Kubernetes resources for AzureIdentity and AzureIdentityBinding, which will allow for the creation of AzureAssignedIdentity resources.
 
-Create an AzureIdentity configuration file for each user-assigned identity.
+Create an AzureIdentity configuration file for each user-assigned identity on your master/controlplane VM/VMSS. Use `type: 0` for user-assigned MSI instead of service principal.
 
 ```yaml
 apiVersion: "aadpodidentity.k8s.io/v1"
@@ -29,7 +29,9 @@ spec:
     ClientID: <identity-client-id> 
 ```
 
-Create an AzureIdentityBinding configuration file for AzureIdentity that you created. User selector 'node-label-operator'.
+Then run `kubectl apply -f <aadpodidentity-config-file>.yaml`.
+
+Create an AzureIdentityBinding configuration file for each AzureIdentity that you created. User selector 'node-label-operator'.
 
 ```yaml
 apiVersion: "aadpodidentity.k8s.io/v1"
@@ -41,5 +43,8 @@ spec:
     Selector: "node-label-operator"
 ```
 
+Then run `kubectl apply -f <aadpodidentitybinding-config-file>.yaml`.
 
-If you edited `config/manager/manager.yaml`, make sure that pods still have the label 'aadpodidentity=node-label-operator'.
+
+If you edited `config/manager/manager.yaml`, make sure that pods still have the label 'aadpodidbinding=node-label-operator'.
+

@@ -51,7 +51,7 @@ func main() {
 	flag.StringVar(&metricsAddr, "metrics-addr", ":8080", "The address the metric endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "enable-leader-election", false,
 		"Enable leader election for controller manager. Enabling this will ensure there is only one active controller manager.")
-	flag.StringVar(&syncPeriod, "sync-period", "1h" /* "10h"*/, "Min frequency that tags and nodes are reconciled. Give time as integer with suffixes ns, us, ms, s, m, or h. Ex: \"100ns\" or \"2h30m\". Default is \"10h\".")
+	flag.StringVar(&syncPeriod, "sync-period", "10h" /*1h*/, "Min frequency that tags and nodes are reconciled. Give time as integer with suffixes ns, us, ms, s, m, or h. Ex: \"100ns\" or \"2h30m\". Default is \"10h\".")
 	flag.Parse()
 
 	ctrl.SetLogger(zap.Logger(true))
@@ -74,10 +74,12 @@ func main() {
 	}
 
 	if err = (&controller.ReconcileNodeLabel{
-		Client:   mgr.GetClient(),
-		Log:      ctrl.Log.WithName("controllers"),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("node-label-operator"),
+		Client:        mgr.GetClient(),
+		Log:           ctrl.Log.WithName("controllers"),
+		Scheme:        mgr.GetScheme(),
+		Recorder:      mgr.GetEventRecorderFor("node-label-operator"),
+		LastUpdated:   map[string]time.Time{},
+		MinSyncPeriod: time.Minute * 5,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)
