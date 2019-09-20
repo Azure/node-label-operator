@@ -1,6 +1,8 @@
 
 # Node Label Operator
 
+![](https://github.com/Azure/node-label-operator/workflows/Go/badge.svg)
+
 ## Overview
 
 The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node labels in an AKS cluster.
