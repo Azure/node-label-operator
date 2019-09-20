@@ -145,12 +145,6 @@ func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
 	}
 }
 
-func NewFakeConfigMap() *corev1.ConfigMap {
-	return &corev1.ConfigMap{
-		Data: map[string]string{"syncDirection": "two-way", "labelPrefix": ""},
-	}
-}
-
 func newTestNode(name string, labels map[string]string) *corev1.Node {
 	node := &corev1.Node{}
 	node.Name = name

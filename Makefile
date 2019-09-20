@@ -13,7 +13,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet
-	go test ./controller/... -coverprofile cover.out
+	go test ./controller/... ./azure/... -coverprofile cover.out
 
 # Build manager binary
 manager: generate fmt vet

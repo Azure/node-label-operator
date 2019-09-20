@@ -31,19 +31,18 @@ func parseResourceID(resourceID string) (Resource, error) {
 	resourceIDPattern := regexp.MustCompile(resourceIDPatternText)
 	match := resourceIDPattern.FindStringSubmatch(resourceID)
 
-	if len(match) == 0 {
+	if len(match) < 6 {
 		return Resource{}, fmt.Errorf("parsing failed for %s. Invalid resource Id format", resourceID)
 	}
 
 	v := strings.Split(match[5], "/")
-	resourceName := v[len(v)-3]
 
 	result := Resource{
 		SubscriptionID: match[1],
 		ResourceGroup:  match[2],
 		Provider:       match[3],
 		ResourceType:   match[4],
-		ResourceName:   resourceName,
+		ResourceName:   v[0],
 	}
 
 	return result, nil

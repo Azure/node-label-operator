@@ -1,5 +1,3 @@
-Note: don't trust anything in this doc yet! :) still a work in progress
-
 # User-Assigned Pod Identity
 
 This assumes you have already created an Azure Identity, perhaps by using `az identity create`.
@@ -18,6 +16,8 @@ You will need to create the Kubernetes resources for AzureIdentity and AzureIden
 
 Create an AzureIdentity configuration file for each user-assigned identity on your master/controlplane VM/VMSS. Use `type: 0` for user-assigned MSI instead of service principal.
 
+`<sample-aadpodidentity-config-file>.yaml`:
+
 ```yaml
 apiVersion: "aadpodidentity.k8s.io/v1"
 kind: AzureIdentity
@@ -29,9 +29,11 @@ spec:
     ClientID: <identity-client-id> 
 ```
 
-Then run `kubectl apply -f <aadpodidentity-config-file>.yaml`.
+Then run `kubectl apply -f <sample-aadpodidentity-config-file>.yaml`.
 
-Create an AzureIdentityBinding configuration file for each AzureIdentity that you created. User selector 'node-label-operator'.
+Create an AzureIdentityBinding configuration file for each AzureIdentity that you created. Use selector 'node-label-operator'.
+
+`<sample-aadpodidentitybinding-config-file>.yaml`:
 
 ```yaml
 apiVersion: "aadpodidentity.k8s.io/v1"
@@ -43,8 +45,7 @@ spec:
     Selector: "node-label-operator"
 ```
 
-Then run `kubectl apply -f <aadpodidentitybinding-config-file>.yaml`.
-
+Then run `kubectl apply -f <sample-aadpodidentitybinding-config-file>.yaml`.
 
 If you edited `config/manager/manager.yaml`, make sure that pods still have the label 'aadpodidbinding=node-label-operator'.
 
