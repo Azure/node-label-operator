@@ -16,7 +16,7 @@ const (
 	DefaultLabelPrefix         string = "azure.tags"
 	DefaultTagPrefix           string = "node.labels"
 	DefaultResourceGroupFilter string = "none"
-	DefaultInterval            string = "5m" // interval between updates
+	DefaultMinSyncPeriod       string = "5m"
 	UNSET                      string = "unset"
 )
 
@@ -37,12 +37,12 @@ const (
 )
 
 type ConfigOptions struct {
-	SyncDirection       SyncDirection  `json:"syncDirection"` // how do I validate this?
+	SyncDirection       SyncDirection  `json:"syncDirection"`
 	LabelPrefix         string         `json:"labelPrefix"`
 	TagPrefix           string         `json:"tagPrefix"`
 	ConflictPolicy      ConflictPolicy `json:"conflictPolicy"`
 	ResourceGroupFilter string         `json:"resourceGroupFilter"`
-	Interval            string         `json:"interval"`
+	MinSyncPeriod       string         `json:"minSyncPeriod"`
 }
 
 func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
@@ -80,9 +80,9 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 		configOptions.ResourceGroupFilter = DefaultResourceGroupFilter
 	}
 
-	if configOptions.Interval == "" {
-		configOptions.Interval = DefaultInterval
-	} else if _, err = time.ParseDuration(configOptions.Interval); err != nil {
+	if configOptions.MinSyncPeriod == "" {
+		configOptions.MinSyncPeriod = DefaultMinSyncPeriod
+	} else if _, err = time.ParseDuration(configOptions.MinSyncPeriod); err != nil {
 		return ConfigOptions{}, err
 	}
 
@@ -105,7 +105,7 @@ func DefaultConfigOptions() ConfigOptions {
 		TagPrefix:           DefaultTagPrefix,
 		ConflictPolicy:      ARMPrecedence,
 		ResourceGroupFilter: DefaultResourceGroupFilter,
-		Interval:            DefaultInterval,
+		MinSyncPeriod:       DefaultMinSyncPeriod,
 	}
 }
 

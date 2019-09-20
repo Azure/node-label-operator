@@ -74,12 +74,12 @@ func main() {
 	}
 
 	if err = (&controller.ReconcileNodeLabel{
-		Client:      mgr.GetClient(),
-		Log:         ctrl.Log.WithName("controllers"),
-		Scheme:      mgr.GetScheme(),
-		Recorder:    mgr.GetEventRecorderFor("node-label-operator"),
-		LastUpdated: map[string]time.Time{},
-		Interval:    time.Minute * 5,
+		Client:        mgr.GetClient(),
+		Log:           ctrl.Log.WithName("controllers"),
+		Scheme:        mgr.GetScheme(),
+		Recorder:      mgr.GetEventRecorderFor("node-label-operator"),
+		LastUpdated:   map[string]time.Time{},
+		MinSyncPeriod: time.Minute * 5,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)

@@ -33,13 +33,13 @@ const (
 
 type ReconcileNodeLabel struct {
 	client.Client
-	Log         logr.Logger
-	Scheme      *runtime.Scheme
-	Recorder    record.EventRecorder
-	LastUpdated map[string]time.Time // time each node was last updated
-	Interval    time.Duration
-	ctx         context.Context
-	lock        sync.Mutex
+	Log           logr.Logger
+	Scheme        *runtime.Scheme
+	Recorder      record.EventRecorder
+	LastUpdated   map[string]time.Time // time each node was last updated
+	MinSyncPeriod time.Duration
+	ctx           context.Context
+	lock          sync.Mutex
 }
 
 // ComputeResource is a compute resource such as a Virtual Machine that
@@ -202,9 +202,9 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 
 	// check last updated, if updated too recently then wait
 	// it's not the best that you have to wait entire original interval before new interval kicks in
-	intervalStart := time.Now().Add(-r.Interval)
+	syncPeriodStart := time.Now().Add(-r.MinSyncPeriod)
 	updateTimestamp, ok := r.LastUpdated[req.Name]
-	if ok && !updateTimestamp.Before(intervalStart) {
+	if ok && !updateTimestamp.Before(syncPeriodStart) {
 		return ctrl.Result{}, nil
 	}
 
@@ -233,11 +233,11 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	}
 	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
 	log.V(1).Info("configOptions", "tag prefix", configOptions.TagPrefix)
-	log.V(1).Info("configOptions", "interval", configOptions.Interval)
+	log.V(1).Info("configOptions", "min sync period", configOptions.MinSyncPeriod)
 
-	configInterval, err := time.ParseDuration(configOptions.Interval)
-	if configInterval.Milliseconds() != r.Interval.Milliseconds() {
-		r.SetInterval(configInterval)
+	configMinSyncPeriod, err := time.ParseDuration(configOptions.MinSyncPeriod)
+	if configMinSyncPeriod.Milliseconds() != r.MinSyncPeriod.Milliseconds() {
+		r.SetMinSyncPeriod(configMinSyncPeriod)
 	}
 
 	var node corev1.Node
@@ -460,10 +460,10 @@ func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
 	r.LastUpdated[nodeName] = time.Now()
 }
 
-func (r *ReconcileNodeLabel) SetInterval(duration time.Duration) {
+func (r *ReconcileNodeLabel) SetMinSyncPeriod(duration time.Duration) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
-	r.Interval = duration
+	r.MinSyncPeriod = duration
 }
 
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {

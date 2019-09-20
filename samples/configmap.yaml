@@ -9,4 +9,4 @@ data:
     conflictPolicy: "arm-precedence"
     syncDirection: "two-way"
     resourceGroup: "shoshanargwestus2"
-    interval: "1m"
+    minSyncPeriod: "1m"
