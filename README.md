@@ -1,7 +1,7 @@
 
 # Node Label Operator
 
-![](https://github.com/Azure/node-label-operator/workflows/Go/badge.svg)
+![](https://github.com/Azure/node-label-operator/workflows/CI/badge.svg)
 
 ## Overview
 
