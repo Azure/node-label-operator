@@ -454,12 +454,16 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	return newTags, nil
 }
 
-func labelPatch(labels map[string]string) ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": labels,
-		},
-	})
+func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.LastUpdated[nodeName] = time.Now()
+}
+
+func (r *ReconcileNodeLabel) SetInterval(duration time.Duration) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.Interval = duration
 }
 
 func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
@@ -472,18 +476,6 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 			GenericFunc: genericFunc,
 		}).
 		Complete(r)
-}
-
-func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.LastUpdated[nodeName] = time.Now()
-}
-
-func (r *ReconcileNodeLabel) SetInterval(duration time.Duration) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.Interval = duration
 }
 
 // for predicate
@@ -507,4 +499,12 @@ func deleteFunc(e event.DeleteEvent) bool {
 
 func genericFunc(e event.GenericEvent) bool {
 	return false
+}
+
+func labelPatch(labels map[string]string) ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": labels,
+		},
+	})
 }
