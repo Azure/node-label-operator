@@ -201,6 +201,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
 	// check last updated, if updated too recently then wait
+	// it's not the best that you have to wait entire original interval before new interval kicks in
 	intervalStart := time.Now().Add(-r.Interval)
 	updateTimestamp, ok := r.LastUpdated[req.Name]
 	if ok && !updateTimestamp.Before(intervalStart) {
