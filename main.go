@@ -79,6 +79,7 @@ func main() {
 		Scheme:      mgr.GetScheme(),
 		Recorder:    mgr.GetEventRecorderFor("node-label-operator"),
 		LastUpdated: map[string]time.Time{},
+		Interval:    time.Minute * 5,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)

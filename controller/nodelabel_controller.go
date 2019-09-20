@@ -36,9 +36,10 @@ type ReconcileNodeLabel struct {
 	Log         logr.Logger
 	Scheme      *runtime.Scheme
 	Recorder    record.EventRecorder
+	LastUpdated map[string]time.Time // time each node was last updated
+	Interval    time.Duration
 	ctx         context.Context
 	lock        sync.Mutex
-	LastUpdated map[string]time.Time // time each node was last updated
 }
 
 // ComputeResource is a compute resource such as a Virtual Machine that
@@ -200,9 +201,9 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
 	// check last updated, if updated too recently then wait
-	fiveMinutesAgo := time.Now().Add(time.Minute * time.Duration(-5))
+	intervalStart := time.Now().Add(-r.Interval)
 	updateTimestamp, ok := r.LastUpdated[req.Name]
-	if ok && !updateTimestamp.Before(fiveMinutesAgo) {
+	if ok && !updateTimestamp.Before(intervalStart) {
 		return ctrl.Result{}, nil
 	}
 
@@ -230,6 +231,13 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		}
 	}
 	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
+	log.V(1).Info("configOptions", "tag prefix", configOptions.TagPrefix)
+	log.V(1).Info("configOptions", "interval", configOptions.Interval)
+
+	configInterval, err := time.ParseDuration(configOptions.Interval)
+	if configInterval.Milliseconds() != r.Interval.Milliseconds() {
+		r.SetInterval(configInterval)
+	}
 
 	var node corev1.Node
 	if err := r.Get(r.ctx, req.NamespacedName, &node); err != nil {
@@ -351,8 +359,6 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 // return patch with new labels, if any, otherwise return nil for no new labels or an error
 func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
-	log.V(0).Info("configOptions", "sync direction", configOptions.SyncDirection)
-	log.V(0).Info("configOptions", "tag prefix", configOptions.TagPrefix)
 
 	changed := false
 	for tagName, tagVal := range computeResource.Tags() {
@@ -402,7 +408,6 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 
 func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
-	log.V(1).Info("configOptions", "sync direction", configOptions.SyncDirection)
 
 	if len(computeResource.Tags()) > maxNumTags {
 		log.V(0).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
@@ -472,6 +477,12 @@ func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	r.LastUpdated[nodeName] = time.Now()
+}
+
+func (r *ReconcileNodeLabel) SetInterval(duration time.Duration) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	r.Interval = duration
 }
 
 // for predicate

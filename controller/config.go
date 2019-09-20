@@ -6,6 +6,7 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -15,6 +16,7 @@ const (
 	DefaultLabelPrefix         string = "azure.tags"
 	DefaultTagPrefix           string = "node.labels"
 	DefaultResourceGroupFilter string = "none"
+	DefaultInterval            string = "5m" // interval between updates
 	UNSET                      string = "unset"
 )
 
@@ -40,6 +42,7 @@ type ConfigOptions struct {
 	TagPrefix           string         `json:"tagPrefix"`
 	ConflictPolicy      ConflictPolicy `json:"conflictPolicy"`
 	ResourceGroupFilter string         `json:"resourceGroupFilter"`
+	Interval            string         `json:"interval"`
 }
 
 func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
@@ -77,6 +80,12 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 		configOptions.ResourceGroupFilter = DefaultResourceGroupFilter
 	}
 
+	if configOptions.Interval == "" {
+		configOptions.Interval = DefaultInterval
+	} else if _, err = time.ParseDuration(configOptions.Interval); err != nil {
+		return ConfigOptions{}, err
+	}
+
 	return configOptions, nil
 }
 
@@ -96,6 +105,7 @@ func DefaultConfigOptions() ConfigOptions {
 		TagPrefix:           DefaultTagPrefix,
 		ConflictPolicy:      ARMPrecedence,
 		ResourceGroupFilter: DefaultResourceGroupFilter,
+		Interval:            DefaultInterval,
 	}
 }
 
