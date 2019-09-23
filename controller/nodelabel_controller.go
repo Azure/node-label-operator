@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,12 +32,17 @@ const (
 	VMSS string = "virtualMachineScaleSets"
 )
 
+const (
+	lastUpdateLabel    string        = "last-update"
+	minSyncPeriodLabel string        = "min-sync-period"
+	FiveMinutes        time.Duration = time.Minute * 5
+)
+
 type ReconcileNodeLabel struct {
 	client.Client
 	Log           logr.Logger
 	Scheme        *runtime.Scheme
 	Recorder      record.EventRecorder
-	LastUpdated   map[string]time.Time // time each node was last updated
 	MinSyncPeriod time.Duration
 	ctx           context.Context
 	lock          sync.Mutex
@@ -200,14 +206,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
-	// check last updated, if updated too recently then wait
-	// it's not the best that you have to wait entire original interval before new interval kicks in
-	syncPeriodStart := time.Now().Add(-r.MinSyncPeriod)
-	updateTimestamp, ok := r.LastUpdated[req.Name]
-	if ok && !updateTimestamp.Before(syncPeriodStart) {
-		return ctrl.Result{}, nil
-	}
-
 	var configMap corev1.ConfigMap
 	var configOptions ConfigOptions
 	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
@@ -223,7 +221,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 			log.Error(err, "failed to create new default options configmap")
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil // do I return anything different?
+		return ctrl.Result{RequeueAfter: time.Minute}, nil // do I return anything different?
 	} else {
 		configOptions, err = NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
 		if err != nil {
@@ -241,7 +239,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 	if configMinSyncPeriod.Milliseconds() != r.MinSyncPeriod.Milliseconds() {
-		r.SetMinSyncPeriod(configMinSyncPeriod)
+		r.setMinSyncPeriod(configMinSyncPeriod)
 	}
 
 	var node corev1.Node
@@ -279,7 +277,17 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 	}
 
-	r.SetLastUpdated(req.NamespacedName.Name)
+	// update lastUpdate label on node
+	r.lastUpdateLabel(&node)
+	patch, err := labelPatch(node.Labels)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+	if err = r.Patch(r.ctx, &node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
+		log.Error(err, "failed to patch lastUpdate label")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+
 	return ctrl.Result{}, nil
 }
 
@@ -458,13 +466,13 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	return newTags, nil
 }
 
-func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.LastUpdated[nodeName] = time.Now()
+// update the lastUpdate label on node, or create if not there
+func (r *ReconcileNodeLabel) lastUpdateLabel(node *corev1.Node) {
+	node.Labels[lastUpdateLabel] = strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ".")
+	node.Labels[minSyncPeriodLabel] = r.MinSyncPeriod.String()
 }
 
-func (r *ReconcileNodeLabel) SetMinSyncPeriod(duration time.Duration) {
+func (r *ReconcileNodeLabel) setMinSyncPeriod(duration time.Duration) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	r.MinSyncPeriod = duration
@@ -482,18 +490,21 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// for predicate
-// but how can I quickly check for vmss tags :(
-
-// are updates going to create?
-// true because node might have a new label I guess
 func updateFunc(e event.UpdateEvent) bool {
-	return true
+	node, ok := e.ObjectNew.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	return timeToUpdate(node)
 }
 
 // somehow there's a ton of create events
 func createFunc(e event.CreateEvent) bool {
-	return true
+	node, ok := e.Object.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	return timeToUpdate(node)
 }
 
 // return true because vmss might need to be updated?
@@ -503,6 +514,30 @@ func deleteFunc(e event.DeleteEvent) bool {
 
 func genericFunc(e event.GenericEvent) bool {
 	return false
+}
+
+func timeToUpdate(node *corev1.Node) bool {
+	label, ok := node.Labels[lastUpdateLabel]
+	if !ok {
+		return true // let things through the first time
+	}
+	var period time.Duration
+	// if lastUpdate formatted incorrectly, do I let stuff through?
+	lastUpdate, err := time.Parse(time.RFC3339, strings.ReplaceAll(label, ".", ":"))
+	if err != nil {
+		return true // letting everything through if label formatted incorrectly
+	}
+	minSyncPeriod, ok := node.Labels[minSyncPeriodLabel]
+	if ok {
+		period, err = time.ParseDuration(minSyncPeriod)
+		if err != nil {
+			period = FiveMinutes
+		}
+	} else {
+		period = FiveMinutes
+	}
+	syncPeriodStart := time.Now().Add(-period)
+	return lastUpdate.Before(syncPeriodStart)
 }
 
 func labelPatch(labels map[string]string) ([]byte, error) {
