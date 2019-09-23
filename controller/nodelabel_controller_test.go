@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
@@ -70,7 +71,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			node := newTestNode(tt.name, tt.labels)
 
 			// I should probably check the return value of patch :/
-			_, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, config)
+			_, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, &config)
 			if err != nil {
 				t.Errorf("failed to apply tags to nodes: %q", err)
 			}
@@ -116,18 +117,14 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
 
-			tags, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, config)
+			tags, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, &config)
 			if err != nil {
 				t.Errorf("failed to apply labels to azure resources: %q", err)
 			}
 
-			for k, expectedPtr := range tt.expectedTags {
-				// why is it always broccoli???
-				actualPtr, ok := tags[k]
+			for k, expected := range tt.expectedTags {
+				actual, ok := tags[k]
 				assert.True(t, ok)
-				fmt.Println(k, *expectedPtr, *actualPtr)
-				expected := *expectedPtr
-				actual := *actualPtr
 				assert.Equal(t, expected, actual)
 			}
 
@@ -136,12 +133,74 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 }
 
 // test helper functions
+func TestLastUpdateLabel(t *testing.T) {
+	var lastUpdateLabelTest = []struct {
+		name          string
+		minSyncPeriod time.Duration
+		expected      string
+	}{
+		{
+			"node1",
+			FiveMinutes,
+			FiveMinutes.String(),
+		},
+		{
+			"node2",
+			time.Minute,
+			time.Minute.String(),
+		},
+	}
+
+	for _, tt := range lastUpdateLabelTest {
+		t.Run(tt.name, func(t *testing.T) {
+			reconciler := NewFakeNodeLabelReconciler()
+			reconciler.MinSyncPeriod = tt.minSyncPeriod
+			node := newTestNode(tt.name, map[string]string{})
+			reconciler.lastUpdateLabel(node)
+			label, ok := node.Labels[minSyncPeriodLabel]
+			assert.True(t, ok)
+			assert.Equal(t, label, tt.expected)
+
+		})
+	}
+}
+
+func TestTimeToUpdate(t *testing.T) {
+	var timeToUpdateTest = []struct {
+		name     string
+		labels   map[string]string
+		expected bool
+	}{
+		{
+			"node1",
+			map[string]string{},
+			true,
+		},
+		{
+			"node2",
+			map[string]string{"last-update": "2019-09-23T20.01.43Z", "min-sync-period": "1m"},
+			true,
+		},
+	}
+
+	for _, tt := range timeToUpdateTest {
+		t.Run(tt.name, func(t *testing.T) {
+			node := newTestNode(tt.name, tt.labels)
+
+			actual := timeToUpdate(node)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+// test helper functions	// test helper functions
 
 func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
 	return &ReconcileNodeLabel{
-		Client: ctrlfake.NewFakeClientWithScheme(scheme.Scheme),
-		Log:    ctrl.Log.WithName("test"),
-		ctx:    context.Background(),
+		Client:        ctrlfake.NewFakeClientWithScheme(scheme.Scheme),
+		Log:           ctrl.Log.WithName("test"),
+		ctx:           context.Background(),
+		MinSyncPeriod: FiveMinutes,
 	}
 }
 
@@ -165,6 +224,3 @@ func labelMapToTagMap(labels map[string]string) map[string]*string {
 	}
 	return tags
 }
-
-// test authentication?
-// test config stuff?

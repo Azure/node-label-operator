@@ -46,10 +46,10 @@ type ConfigOptions struct {
 	MinSyncPeriod       string         `json:"minSyncPeriod"`
 }
 
-func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
+func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
 	configOptions, err := loadConfigOptionsFromConfigMap(configMap)
 	if err != nil {
-		return ConfigOptions{}, err
+		return nil, err
 	}
 
 	if configOptions.SyncDirection == "" {
@@ -57,7 +57,7 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 	} else if configOptions.SyncDirection != TwoWay &&
 		configOptions.SyncDirection != ARMToNode &&
 		configOptions.SyncDirection != NodeToARM {
-		return ConfigOptions{}, errors.New("invalid sync direction")
+		return nil, errors.New("invalid sync direction")
 	}
 
 	if configOptions.LabelPrefix == UNSET {
@@ -76,7 +76,7 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 	} else if configOptions.ConflictPolicy != Ignore &&
 		configOptions.ConflictPolicy != ARMPrecedence &&
 		configOptions.ConflictPolicy != NodePrecedence {
-		return ConfigOptions{}, errors.New("invalid tag-to-label conflict policy")
+		return nil, errors.New("invalid tag-to-label conflict policy")
 	}
 
 	if configOptions.ResourceGroupFilter == "" {
@@ -86,10 +86,10 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 	if configOptions.MinSyncPeriod == "" {
 		configOptions.MinSyncPeriod = DefaultMinSyncPeriod
 	} else if _, err = time.ParseDuration(configOptions.MinSyncPeriod); err != nil {
-		return ConfigOptions{}, err
+		return nil, err
 	}
 
-	return configOptions, nil
+	return &configOptions, nil
 }
 
 func NewDefaultConfigOptions() (*corev1.ConfigMap, error) {
