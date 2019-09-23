@@ -7,6 +7,6 @@ data:
     labelPrefix: "azure.tags"
     tagPrefix: ""
     conflictPolicy: "arm-precedence"
-    syncDirection: "two-way"
+    syncDirection: "arm-to-node"
     resourceGroup: "shoshanargwestus2"
     minSyncPeriod: "1m"
