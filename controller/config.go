@@ -63,7 +63,7 @@ func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
 	if configOptions.LabelPrefix == UNSET {
 		configOptions.LabelPrefix = DefaultLabelPrefix
 	} else if len(configOptions.LabelPrefix) > maxLabelPrefixLen {
-		return ConfigOptions{}, fmt.Errorf(fmt.Sprintf("label prefix is over %d characters", maxLabelPrefixLen))
+		return nil, fmt.Errorf(fmt.Sprintf("label prefix is over %d characters", maxLabelPrefixLen))
 	}
 
 	// also validate prefix?
