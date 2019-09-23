@@ -207,7 +207,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
 	var configMap corev1.ConfigMap
-	var configOptions ConfigOptions
 	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
@@ -222,12 +221,11 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
 		return ctrl.Result{RequeueAfter: time.Minute}, nil // do I return anything different?
-	} else {
-		configOptions, err = NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
-		if err != nil {
-			log.Error(err, "failed to load options from config file")
-			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
-		}
+	}
+	configOptions, err := NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
+	if err != nil {
+		log.Error(err, "failed to load options from config file")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
 	log.V(1).Info("configOptions", "tag prefix", configOptions.TagPrefix)
@@ -289,7 +287,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 
 // pass VMSS -> tags info and assign to nodes on VMs (unless node already has label)
 func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource,
-	node *corev1.Node, configOptions ConfigOptions) error {
+	node *corev1.Node, configOptions *ConfigOptions) error {
 	vmss, err := NewVMSS(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
@@ -329,7 +327,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 }
 
 func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource,
-	node *corev1.Node, configOptions ConfigOptions) error {
+	node *corev1.Node, configOptions *ConfigOptions) error {
 	vm, err := NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
@@ -366,7 +364,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 }
 
 // return patch with new labels, if any, otherwise return nil for no new labels or an error
-func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) ([]byte, error) {
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	changed := false
@@ -375,7 +373,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 			log.V(0).Info("invalid label name", "tag name", tagName)
 			continue
 		}
-		validLabelName := ConvertTagNameToValidLabelName(tagName, configOptions)
+		validLabelName := ConvertTagNameToValidLabelName(tagName, *configOptions)
 		labelVal, ok := node.Labels[validLabelName]
 		if !ok {
 			// add tag as label
@@ -415,7 +413,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	return patch, nil
 }
 
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (map[string]*string, error) {
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	if len(computeResource.Tags()) > maxNumTags {
@@ -425,11 +423,11 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 
 	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
-		if !ValidTagName(labelName, configOptions) {
+		if !ValidTagName(labelName, *configOptions) {
 			// log.V(1).Info("invalid tag name", "label name", labelName)
 			continue
 		}
-		validTagName := ConvertLabelNameToValidTagName(labelName, configOptions)
+		validTagName := ConvertLabelNameToValidTagName(labelName, *configOptions)
 		tagVal, ok := computeResource.Tags()[validTagName]
 		if !ok {
 			// add label as tag
@@ -533,10 +531,7 @@ func timeToUpdate(node *corev1.Node) bool {
 		period = FiveMinutes
 	}
 	syncPeriodStart := time.Now().Add(-period)
-	if lastUpdate.After(syncPeriodStart) {
-		return false
-	}
-	return true
+	return lastUpdate.Before(syncPeriodStart)
 }
 
 func labelPatch(labels map[string]string) ([]byte, error) {
