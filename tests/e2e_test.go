@@ -97,7 +97,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	}
 
 	// clean up nodes by deleting labels
-	for key, _ := range tags {
+	for key := range tags {
 		// delete from every node
 		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
 		for _, node := range nodeList.Items {
@@ -168,7 +168,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 
 	// clean up nodes by deleting labels
 	for _, node := range nodeList.Items {
-		for key, _ := range labels {
+		for key := range labels {
 			_, ok := node.Labels[key]
 			assert.True(ok)
 			delete(node.Labels, key)

@@ -6,6 +6,7 @@ package controller
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -61,6 +62,8 @@ func NewConfigOptions(configMap corev1.ConfigMap) (ConfigOptions, error) {
 
 	if configOptions.LabelPrefix == UNSET {
 		configOptions.LabelPrefix = DefaultLabelPrefix
+	} else if len(configOptions.LabelPrefix) > maxLabelPrefixLen {
+		return ConfigOptions{}, fmt.Errorf(fmt.Sprintf("label prefix is over %d characters", maxLabelPrefixLen))
 	}
 
 	// also validate prefix?

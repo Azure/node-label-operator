@@ -113,7 +113,7 @@ func (m VirtualMachine) SetTag(name string, value *string) {
 func VMUserAssignedIdentity(vm compute.VirtualMachine) compute.VirtualMachine {
 	if vm.Identity != nil {
 		vm.Identity.Type = compute.ResourceIdentityTypeUserAssigned
-		for id, _ := range vm.Identity.UserAssignedIdentities {
+		for id := range vm.Identity.UserAssignedIdentities {
 			vm.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineIdentityUserAssignedIdentitiesValue{}
 		}
 	}
@@ -184,7 +184,7 @@ func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
 func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.VirtualMachineScaleSet {
 	if vmss.Identity != nil { // is this an error otherwise?
 		vmss.Identity.Type = compute.ResourceIdentityTypeUserAssigned
-		for id, _ := range vmss.Identity.UserAssignedIdentities {
+		for id := range vmss.Identity.UserAssignedIdentities {
 			vmss.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
 		}
 	}
@@ -236,6 +236,10 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	log.V(1).Info("configOptions", "min sync period", configOptions.MinSyncPeriod)
 
 	configMinSyncPeriod, err := time.ParseDuration(configOptions.MinSyncPeriod)
+	if err != nil {
+		log.Error(err, "failed to parse minSyncPeriod")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
 	if configMinSyncPeriod.Milliseconds() != r.MinSyncPeriod.Milliseconds() {
 		r.SetMinSyncPeriod(configMinSyncPeriod)
 	}
