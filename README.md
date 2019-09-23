@@ -1,4 +1,3 @@
-
 # Node Label Operator
 
 ## Overview

@@ -43,7 +43,7 @@ func initialize(c *Cluster) error {
 		return errors.New("missing parameters: KubeConfigPath must be set")
 	}
 	// get these as environment variables??
-	// do I want to create the test cluster(s) here somehow?
+	// create the test cluster(s) here somehow?
 	return nil
 }
 
