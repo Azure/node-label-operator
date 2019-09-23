@@ -193,20 +193,6 @@ func TestTimeToUpdate(t *testing.T) {
 	}
 }
 
-func TestLabelPatch(t *testing.T) {
-	// var labelPatchTest = []struct {
-	// 	name     string
-	// 	labels   map[string]string
-	// 	expected []byte
-	// }{
-	// 	{
-	// 		"patch1",
-	// 		map[string]string{"env": "test"},
-	// 		[]byte...
-	// 	},
-	// }
-}
-
 // test helper functions
 
 func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
@@ -238,6 +224,3 @@ func labelMapToTagMap(labels map[string]string) map[string]*string {
 	}
 	return tags
 }
-
-// test authentication?
-// test config stuff?
