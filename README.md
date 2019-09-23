@@ -1,5 +1,3 @@
-<<<<<<< HEAD
-
 # Node Label Operator
 
 ## Overview
