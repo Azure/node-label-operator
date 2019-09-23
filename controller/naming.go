@@ -89,20 +89,6 @@ func labelWithoutPrefix(labelName, prefix string) string {
 	return labelName
 }
 
-// // what character should I use?
-// func tagWithPrefix(tagName, prefix string) string {
-// 	return fmt.Sprintf("%s-%s", prefix, tagName)
-// }
-
-// // what character should I use?
-// func tagWithoutPrefix(tagName, prefix string) string {
-// 	if strings.HasPrefix(tagName, fmt.Sprintf("%s-", prefix)) {
-// 		return strings.TrimPrefix(tagName, fmt.Sprintf("%s-", prefix))
-// 	}
-// 	return tagName
-
-// }
-
 func validTagName(labelName string) bool {
 	if len(labelName) > maxTagNameLen {
 		return false
