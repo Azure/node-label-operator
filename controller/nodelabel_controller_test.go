@@ -5,6 +5,7 @@ package controller
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
@@ -24,10 +25,6 @@ type FakeComputeResource struct {
 func NewFakeComputeResource() FakeComputeResource {
 	return FakeComputeResource{tags: map[string]*string{}}
 }
-
-// func (c FakeComputeResource) Get(ctx context.Context, name string) (FakeComputeResource, error) {
-// 	return c, nil
-// }
 
 func (c FakeComputeResource) Update(ctx context.Context) error {
 	return nil
@@ -52,11 +49,25 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 		expectedLabels map[string]string
 	}{
 		{
-			"node1",
+			"node1", // starting with no labels on node
 			map[string]*string{"env": &vals[0], "dept": &vals[1]},
 			map[string]string{},
 			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
 		},
+		{
+			"node2",
+			map[string]*string{"env": &vals[0], "dept": &vals[1]},
+			map[string]string{"favfruit": "banana"}, // won't be contained in patch though it shouldn't go away
+			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
+		},
+		{
+			"node3", // example of deleting a tag
+			map[string]*string{"env": &vals[0]},
+			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0]},
+		},
+		// should also have test of changing value of tag that exists
+		// have node with labels with different prefixes maybe
 	}
 
 	config := DefaultConfigOptions() // tag-to-node only
@@ -71,15 +82,31 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			node := newTestNode(tt.name, tt.labels)
 
 			// I should probably check the return value of patch :/
-			_, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, &config)
+			patch, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, &config)
 			if err != nil {
 				t.Errorf("failed to apply tags to nodes: %q", err)
 			}
 
-			for k, v := range tt.expectedLabels {
-				val, ok := node.Labels[k]
+			spec := map[string]interface{}{}
+			if err := json.Unmarshal(patch, &spec); err != nil {
+				t.Errorf("failed to unmarshal patch data into map")
+			}
+			metadata, ok := spec["metadata"].(map[string]interface{})
+			assert.True(t, ok)
+			// labels, ok := metadata["labels"].(map[string]*string)
+			labels, ok := metadata["labels"].(map[string]interface{})
+			assert.True(t, ok)
+			assert.Equal(t, len(tt.expectedLabels), len(labels))
+			fmt.Println(len(labels)) // not good that this is zero...
+			for k, _ := range tt.expectedLabels {
+				// val, ok := node.Labels[k]
+				_, ok := labels[k]
 				assert.True(t, ok)
-				assert.Equal(t, v, val)
+				// assert.True(t, val != nil)
+				// fmt.Println(*val)
+				// _, ok = val.(*string)
+				// assert.True(t, ok)
+				// assert.Equal(t, v, *labelVal)
 			}
 		})
 	}

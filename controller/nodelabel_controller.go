@@ -51,7 +51,6 @@ type ReconcileNodeLabel struct {
 // ComputeResource is a compute resource such as a Virtual Machine that
 // should have its labels propagated to nodes running on the compute resource
 type ComputeResource interface {
-	// Get(ctx context.Context, name string) (azure.Spec, error)
 	Update(ctx context.Context) error
 	Tags() map[string]*string
 	SetTag(name string, value *string)
@@ -76,17 +75,6 @@ func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName stri
 	vm = VMUserAssignedIdentity(vm)
 
 	return &VirtualMachine{group: resourceGroup, client: &client, vm: &vm}, nil
-}
-
-func (m VirtualMachine) Get(ctx context.Context, name string) (compute.VirtualMachine, error) {
-	vm, err := m.client.Get(ctx, m.group, name, compute.InstanceView)
-	if err != nil {
-		return vm, err
-	}
-
-	vm = VMUserAssignedIdentity(vm)
-
-	return vm, nil
 }
 
 func (m VirtualMachine) Update(ctx context.Context) error {
@@ -145,18 +133,6 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 	vmss = VMSSUserAssignedIdentity(vmss)
 
 	return &VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
-}
-
-// find a way to actually use get??
-func (m VirtualMachineScaleSet) Get(ctx context.Context, name string) (compute.VirtualMachineScaleSet, error) {
-	vmss, err := m.client.Get(ctx, m.group, name)
-	if err != nil {
-		return compute.VirtualMachineScaleSet{}, err
-	}
-
-	vmss = VMSSUserAssignedIdentity(vmss)
-
-	return vmss, nil
 }
 
 // does this work the wayw it's supposed to?
@@ -372,6 +348,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	changed := false
+	newLabels := map[string]*string{} // hoping this will let me do null
 	for tagName, tagVal := range computeResource.Tags() {
 		if !ValidLabelName(tagName) {
 			log.V(0).Info("invalid label name", "tag name", tagName)
@@ -382,14 +359,14 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 		if !ok {
 			// add tag as label
 			log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
-			node.Labels[validLabelName] = *tagVal
+			newLabels[validLabelName] = tagVal
 			changed = true
 		} else if labelVal != *tagVal {
 			switch configOptions.ConflictPolicy {
 			case ARMPrecedence:
 				// set label anyway
 				log.V(1).Info("overriding existing node label with ARM tag", "tagName", tagName, "tagVal", tagVal)
-				node.Labels[validLabelName] = *tagVal
+				newLabels[validLabelName] = tagVal
 				changed = true
 			case NodePrecedence:
 				// do nothing
@@ -405,11 +382,28 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 		}
 	}
 
+	// delete labels if tag has been deleted
+	if configOptions.LabelPrefix != "" {
+		for labelFullName, labelVal := range node.Labels {
+			if HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
+				// check if exists on vm/vmss
+				labelName := labelWithoutPrefix(labelFullName, configOptions.LabelPrefix)
+				_, ok := computeResource.Tags()[labelName]
+				if !ok { // if label doesn't exist on vm/vmss, delete
+					log.V(1).Info("deleting label from node", "label name", labelFullName, "label value", labelVal)
+					// do I have to set to 'null' somehow? how do I do that?
+					newLabels[labelFullName] = nil
+					changed = true
+				}
+			}
+		}
+	}
+
 	if !changed { // to avoid unnecessary patching
 		return nil, nil
 	}
 
-	patch, err := labelPatch(node.Labels)
+	patch, err := labelPatchWithDelete(newLabels)
 	if err != nil {
 		return nil, err
 	}
@@ -539,6 +533,14 @@ func timeToUpdate(node *corev1.Node) bool {
 }
 
 func labelPatch(labels map[string]string) ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"metadata": map[string]interface{}{
+			"labels": labels,
+		},
+	})
+}
+
+func labelPatchWithDelete(labels map[string]*string) ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"labels": labels,

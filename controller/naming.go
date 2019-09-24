@@ -116,3 +116,7 @@ func validLabelName(tagName string) bool {
 	}
 	return true
 }
+
+func HasLabelPrefix(labelName string, labelPrefix string) bool {
+	return strings.HasPrefix(labelName, fmt.Sprintf("%s/", labelPrefix))
+}
