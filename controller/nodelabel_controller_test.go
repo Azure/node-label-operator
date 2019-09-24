@@ -17,26 +17,6 @@ import (
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-type FakeComputeResource struct {
-	tags map[string]*string
-}
-
-func NewFakeComputeResource() FakeComputeResource {
-	return FakeComputeResource{tags: map[string]*string{}}
-}
-
-func (c FakeComputeResource) Update(ctx context.Context) error {
-	return nil
-}
-
-func (c FakeComputeResource) Tags() map[string]*string {
-	return c.tags
-}
-
-func (c FakeComputeResource) SetTag(name string, value *string) {
-	c.tags[name] = value
-}
-
 // I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
 // ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
@@ -96,7 +76,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			labels, ok := metadata["labels"].(map[string]interface{})
 			assert.True(t, ok)
 			assert.Equal(t, len(tt.expectedPatchLabels), len(labels))
-			for k, _ := range tt.expectedPatchLabels {
+			for k := range tt.expectedPatchLabels {
 				_, ok := labels[k]
 				_, existed := node.Labels[k]
 				assert.True(t, (!existed && ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
@@ -147,7 +127,7 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 			for k, expected := range tt.expectedTags {
 				actual, ok := tags[k]
 				assert.True(t, ok)
-				assert.Equal(t, expected, actual)
+				assert.Equal(t, *expected, *actual) // are you kidding me right now, why does this only sometimes work??
 			}
 
 		})
@@ -215,7 +195,7 @@ func TestTimeToUpdate(t *testing.T) {
 	}
 }
 
-// test helper functions	// test helper functions
+// test helper functions
 
 func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
 	return &ReconcileNodeLabel{
