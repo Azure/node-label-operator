@@ -99,6 +99,14 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			labels, ok := metadata["labels"].(map[string]interface{})
 			assert.True(t, ok)
 			assert.Equal(t, len(tt.expectedPatchLabels), len(labels))
+			// for k, v := range tt.expectedPatchLabels {
+			// 	label, ok := labels[k]
+			// 	_, existed := node.Labels[k]
+			// 	assert.True(t, (ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
+			// 	if ok {
+			// 		assert.Equal(t, v, label.(string))
+			// 	}
+			// }
 			for k := range tt.expectedPatchLabels {
 				_, ok := labels[k]
 				_, existed := node.Labels[k]
@@ -151,6 +159,11 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 				_, ok := tags[k]
 				assert.True(t, ok)
 			}
+			// for k, expected := range tt.expectedTags {
+			// 	actual, ok := tags[k]
+			// 	assert.True(t, ok)
+			// 	assert.Equal(t, *expected, *actual)
+			// }
 		})
 	}
 }
