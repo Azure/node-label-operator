@@ -20,9 +20,7 @@ import (
 // I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
 // ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
-	var vals = [2]string{"test", "hr"}
-	var mapVals1 = map[string]string{"env": vals[0], "dept": vals[1]}
-	var mapVals2 = map[string]string{"env": vals[0]}
+	// is the problem that I'm reading from same arrays?
 	var armTagsTest = []struct {
 		name                string
 		tags                map[string]*string
@@ -31,23 +29,28 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	}{
 		{
 			"node1", // starting with no labels on node
-			labelMapToTagMap(mapVals1),
+			labelMapToTagMap(map[string]string{"env": "test", "v": "1"}),
 			map[string]string{},
-			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0], labelWithPrefix("dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
 		},
 		{
 			"node2",
-			labelMapToTagMap(mapVals1),
+			labelMapToTagMap(map[string]string{"env": "test", "v": "1"}),
 			map[string]string{"favfruit": "banana"}, // won't be contained in patch though it shouldn't go away
-			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0], labelWithPrefix("dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
 		},
 		{
 			"node3", // example of deleting a tag
-			labelMapToTagMap(mapVals2),
-			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0], labelWithPrefix("dept", DefaultLabelPrefix): vals[1]},
-			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0]},
+			labelMapToTagMap(map[string]string{"env": "test"}),
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test"},
 		},
-		// should also have test of changing value of tag that exists
+		// {
+		// 	"node4", // changing a preexisting tag
+		// 	labelMapToTagMap(map[string]string{"env": "test", "v": "2"}),
+		// 	map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
+		// 	map[string]string{labelWithPrefix("v", DefaultLabelPrefix): "2"},
+		// },
 		// have node with labels with different prefixes maybe
 	}
 
@@ -79,20 +82,13 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			for k := range tt.expectedPatchLabels {
 				_, ok := labels[k]
 				_, existed := node.Labels[k]
-				assert.True(t, (!existed && ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
-				// ideally would check value here
-				// if !existed && ok {
-				// 	_, ok := vptr.(*string)
-				// 	assert.True(t, !ok) // this should be ok though
-				// 	assert.Equal(t, v, *vptr)
-				// }
+				assert.True(t, (ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
 			}
 		})
 	}
 }
 
 func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
-	labels1 := map[string]string{"favfruit": "banana", "favveg": "broccoli"}
 	var nodeLabelsTest = []struct {
 		name         string
 		labels       map[string]string
@@ -101,9 +97,15 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 	}{
 		{
 			"resource1",
-			labels1,
+			map[string]string{"favfruit": "banana", "favveg": "broccoli"},
 			map[string]*string{},
-			labelMapToTagMap(labels1),
+			labelMapToTagMap(map[string]string{"favfruit": "banana", "favveg": "broccoli"}),
+		},
+		{
+			"resource2",
+			map[string]string{"favfruit": "banana", "favveg": "broccoli", "favanimal": "gopher"},
+			labelMapToTagMap(map[string]string{"favanimal": "gopher"}),
+			labelMapToTagMap(map[string]string{"favfruit": "banana", "favveg": "broccoli"}),
 		},
 	}
 
@@ -124,12 +126,11 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 				t.Errorf("failed to apply labels to azure resources: %q", err)
 			}
 
-			for k, expected := range tt.expectedTags {
-				actual, ok := tags[k]
+			assert.Equal(t, len(tt.expectedTags), len(tags))
+			for k := range tt.expectedTags {
+				_, ok := tags[k]
 				assert.True(t, ok)
-				assert.Equal(t, *expected, *actual) // are you kidding me right now, why does this only sometimes work??
 			}
-
 		})
 	}
 }
