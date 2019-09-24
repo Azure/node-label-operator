@@ -1,7 +1,4 @@
-
 # Node Label Operator
-
-![](https://github.com/Azure/node-label-operator/workflows/CI/badge.svg)
 
 ## Overview
 
@@ -10,9 +7,8 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
 ## Installation
 
 ### Prerequisites
-- Go 1.12.9 and above
-- Kubernetes
-- Azure CLI
+- [Go >= 1.13](https://golang.org/dl/)
+- [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
 - access to an Azure account
 
 ## Setup Instructions

@@ -78,8 +78,7 @@ func main() {
 		Log:           ctrl.Log.WithName("controllers"),
 		Scheme:        mgr.GetScheme(),
 		Recorder:      mgr.GetEventRecorderFor("node-label-operator"),
-		LastUpdated:   map[string]time.Time{},
-		MinSyncPeriod: time.Minute * 5,
+		MinSyncPeriod: controller.FiveMinutes,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller")
 		os.Exit(1)

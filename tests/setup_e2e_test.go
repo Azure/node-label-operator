@@ -20,8 +20,8 @@ import (
 var Scheme = runtime.NewScheme()
 
 func AddToScheme(scheme *runtime.Scheme) {
-	clientgoscheme.AddToScheme(scheme)
-	corev1.AddToScheme(scheme)
+	_ = clientgoscheme.AddToScheme(scheme)
+	_ = corev1.AddToScheme(scheme)
 }
 
 // necessary?
@@ -43,6 +43,7 @@ func initialize(c *Cluster) error {
 		return errors.New("missing parameters: KubeConfigPath must be set")
 	}
 	// get these as environment variables??
+	// do I want to create the test cluster(s) here somehow?
 	return nil
 }
 
@@ -56,6 +57,8 @@ func loadConfigOrFail(t *testing.T, kubeconfig string) *rest.Config {
 
 func (s *TestSuite) SetupSuite() {
 	s.T().Logf("\nSetupSuite")
+	err := initialize(s.Cluster)
+	require.Nil(s.T(), err)
 	AddToScheme(Scheme)
 	cl, err := client.New(loadConfigOrFail(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
 	require.NoError(s.T(), err)

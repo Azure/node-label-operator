@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -31,12 +32,17 @@ const (
 	VMSS string = "virtualMachineScaleSets"
 )
 
+const (
+	lastUpdateLabel    string        = "last-update"
+	minSyncPeriodLabel string        = "min-sync-period"
+	FiveMinutes        time.Duration = time.Minute * 5
+)
+
 type ReconcileNodeLabel struct {
 	client.Client
 	Log           logr.Logger
 	Scheme        *runtime.Scheme
 	Recorder      record.EventRecorder
-	LastUpdated   map[string]time.Time // time each node was last updated
 	MinSyncPeriod time.Duration
 	ctx           context.Context
 	lock          sync.Mutex
@@ -113,7 +119,7 @@ func (m VirtualMachine) SetTag(name string, value *string) {
 func VMUserAssignedIdentity(vm compute.VirtualMachine) compute.VirtualMachine {
 	if vm.Identity != nil {
 		vm.Identity.Type = compute.ResourceIdentityTypeUserAssigned
-		for id, _ := range vm.Identity.UserAssignedIdentities {
+		for id := range vm.Identity.UserAssignedIdentities {
 			vm.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineIdentityUserAssignedIdentitiesValue{}
 		}
 	}
@@ -184,7 +190,7 @@ func (m VirtualMachineScaleSet) SetTag(name string, value *string) {
 func VMSSUserAssignedIdentity(vmss compute.VirtualMachineScaleSet) compute.VirtualMachineScaleSet {
 	if vmss.Identity != nil { // is this an error otherwise?
 		vmss.Identity.Type = compute.ResourceIdentityTypeUserAssigned
-		for id, _ := range vmss.Identity.UserAssignedIdentities {
+		for id := range vmss.Identity.UserAssignedIdentities {
 			vmss.Identity.UserAssignedIdentities[id] = &compute.VirtualMachineScaleSetIdentityUserAssignedIdentitiesValue{}
 		}
 	}
@@ -200,16 +206,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	r.ctx = context.Background()
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
-	// check last updated, if updated too recently then wait
-	// it's not the best that you have to wait entire original interval before new interval kicks in
-	syncPeriodStart := time.Now().Add(-r.MinSyncPeriod)
-	updateTimestamp, ok := r.LastUpdated[req.Name]
-	if ok && !updateTimestamp.Before(syncPeriodStart) {
-		return ctrl.Result{}, nil
-	}
-
 	var configMap corev1.ConfigMap
-	var configOptions ConfigOptions
 	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
@@ -223,21 +220,24 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 			log.Error(err, "failed to create new default options configmap")
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
-		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil // do I return anything different?
-	} else {
-		configOptions, err = NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
-		if err != nil {
-			log.Error(err, "failed to load options from config file")
-			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
-		}
+		return ctrl.Result{RequeueAfter: time.Minute}, nil // do I return anything different?
+	}
+	configOptions, err := NewConfigOptions(configMap) // ConfigMap.Data is string -> string but I don't always want that
+	if err != nil {
+		log.Error(err, "failed to load options from config file")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
 	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
 	log.V(1).Info("configOptions", "tag prefix", configOptions.TagPrefix)
 	log.V(1).Info("configOptions", "min sync period", configOptions.MinSyncPeriod)
 
 	configMinSyncPeriod, err := time.ParseDuration(configOptions.MinSyncPeriod)
+	if err != nil {
+		log.Error(err, "failed to parse minSyncPeriod")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
 	if configMinSyncPeriod.Milliseconds() != r.MinSyncPeriod.Milliseconds() {
-		r.SetMinSyncPeriod(configMinSyncPeriod)
+		r.setMinSyncPeriod(configMinSyncPeriod)
 	}
 
 	var node corev1.Node
@@ -275,13 +275,23 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.V(1).Info("unrecognized resource type", "resource type", provider.ResourceType)
 	}
 
-	r.SetLastUpdated(req.NamespacedName.Name)
+	// update lastUpdate label on node
+	r.lastUpdateLabel(&node)
+	patch, err := labelPatch(node.Labels)
+	if err != nil {
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+	if err = r.Patch(r.ctx, &node, client.ConstantPatch(types.MergePatchType, patch)); err != nil {
+		log.Error(err, "failed to patch lastUpdate label")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+
 	return ctrl.Result{}, nil
 }
 
 // pass VMSS -> tags info and assign to nodes on VMs (unless node already has label)
 func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource,
-	node *corev1.Node, configOptions ConfigOptions) error {
+	node *corev1.Node, configOptions *ConfigOptions) error {
 	vmss, err := NewVMSS(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
@@ -321,7 +331,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 }
 
 func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource,
-	node *corev1.Node, configOptions ConfigOptions) error {
+	node *corev1.Node, configOptions *ConfigOptions) error {
 	vm, err := NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
@@ -358,7 +368,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 }
 
 // return patch with new labels, if any, otherwise return nil for no new labels or an error
-func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) ([]byte, error) {
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	changed := false
@@ -367,7 +377,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 			log.V(0).Info("invalid label name", "tag name", tagName)
 			continue
 		}
-		validLabelName := ConvertTagNameToValidLabelName(tagName, configOptions)
+		validLabelName := ConvertTagNameToValidLabelName(tagName, *configOptions)
 		labelVal, ok := node.Labels[validLabelName]
 		if !ok {
 			// add tag as label
@@ -407,7 +417,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	return patch, nil
 }
 
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions ConfigOptions) (map[string]*string, error) {
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	if len(computeResource.Tags()) > maxNumTags {
@@ -417,11 +427,11 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 
 	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
-		if !ValidTagName(labelName, configOptions) {
+		if !ValidTagName(labelName, *configOptions) {
 			// log.V(1).Info("invalid tag name", "label name", labelName)
 			continue
 		}
-		validTagName := ConvertLabelNameToValidTagName(labelName, configOptions)
+		validTagName := ConvertLabelNameToValidTagName(labelName, *configOptions)
 		tagVal, ok := computeResource.Tags()[validTagName]
 		if !ok {
 			// add label as tag
@@ -454,13 +464,13 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	return newTags, nil
 }
 
-func (r *ReconcileNodeLabel) SetLastUpdated(nodeName string) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	r.LastUpdated[nodeName] = time.Now()
+// update the lastUpdate label on node, or create if not there
+func (r *ReconcileNodeLabel) lastUpdateLabel(node *corev1.Node) {
+	node.Labels[lastUpdateLabel] = strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", ".")
+	node.Labels[minSyncPeriodLabel] = r.MinSyncPeriod.String()
 }
 
-func (r *ReconcileNodeLabel) SetMinSyncPeriod(duration time.Duration) {
+func (r *ReconcileNodeLabel) setMinSyncPeriod(duration time.Duration) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
 	r.MinSyncPeriod = duration
@@ -478,18 +488,21 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// for predicate
-// but how can I quickly check for vmss tags :(
-
-// are updates going to create?
-// true because node might have a new label I guess
 func updateFunc(e event.UpdateEvent) bool {
-	return true
+	node, ok := e.ObjectNew.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	return timeToUpdate(node)
 }
 
 // somehow there's a ton of create events
 func createFunc(e event.CreateEvent) bool {
-	return true
+	node, ok := e.Object.(*corev1.Node)
+	if !ok {
+		return false
+	}
+	return timeToUpdate(node)
 }
 
 // return true because vmss might need to be updated?
@@ -499,6 +512,30 @@ func deleteFunc(e event.DeleteEvent) bool {
 
 func genericFunc(e event.GenericEvent) bool {
 	return false
+}
+
+func timeToUpdate(node *corev1.Node) bool {
+	label, ok := node.Labels[lastUpdateLabel]
+	if !ok {
+		return true // let things through the first time
+	}
+	var period time.Duration
+	// if lastUpdate formatted incorrectly, do I let stuff through?
+	lastUpdate, err := time.Parse(time.RFC3339, strings.ReplaceAll(label, ".", ":"))
+	if err != nil {
+		return true // letting everything through if label formatted incorrectly
+	}
+	minSyncPeriod, ok := node.Labels[minSyncPeriodLabel]
+	if ok {
+		period, err = time.ParseDuration(minSyncPeriod)
+		if err != nil {
+			period = FiveMinutes
+		}
+	} else {
+		period = FiveMinutes
+	}
+	syncPeriodStart := time.Now().Add(-period)
+	return lastUpdate.Before(syncPeriodStart)
 }
 
 func labelPatch(labels map[string]string) ([]byte, error) {

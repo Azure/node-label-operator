@@ -47,5 +47,6 @@ spec:
 
 Then run `kubectl apply -f <sample-aadpodidentitybinding-config-file>.yaml`.
 
+
 If you edited `config/manager/manager.yaml`, make sure that pods still have the label 'aadpodidbinding=node-label-operator'.
 

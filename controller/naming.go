@@ -31,8 +31,8 @@ func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions)
 	// lstrip configOptions.TagPrefix if there
 	// don't forget to get rid of '.' after 'node.labels'... are there prefixes here?
 	result := tagName
-	if strings.HasPrefix(tagName, fmt.Sprintf("%s", configOptions.TagPrefix)) {
-		result = strings.TrimPrefix(tagName, fmt.Sprintf("%s", configOptions.TagPrefix))
+	if strings.HasPrefix(tagName, configOptions.TagPrefix) {
+		result = strings.TrimPrefix(tagName, configOptions.TagPrefix)
 	}
 
 	// truncate name segment to 63 characters or less
@@ -56,10 +56,6 @@ func ConvertLabelNameToValidTagName(labelName string, configOptions ConfigOption
 	result := labelName
 	if strings.HasPrefix(labelName, fmt.Sprintf("%s/", configOptions.LabelPrefix)) {
 		result = strings.TrimPrefix(labelName, fmt.Sprintf("%s/", configOptions.LabelPrefix))
-	}
-
-	if validTagName(result) {
-		// what now?
 	}
 
 	// result = tagWithPrefix(result, configOptions.TagPrefix)
@@ -91,20 +87,6 @@ func labelWithoutPrefix(labelName, prefix string) string {
 		return strings.TrimPrefix(labelName, fmt.Sprintf("%s/", prefix))
 	}
 	return labelName
-}
-
-// what character should I use?
-func tagWithPrefix(tagName, prefix string) string {
-	return fmt.Sprintf("%s-%s", prefix, tagName)
-}
-
-// what character should I use?
-func tagWithoutPrefix(tagName, prefix string) string {
-	if strings.HasPrefix(tagName, fmt.Sprintf("%s-", prefix)) {
-		return strings.TrimPrefix(tagName, fmt.Sprintf("%s-", prefix))
-	}
-	return tagName
-
 }
 
 func validTagName(labelName string) bool {
