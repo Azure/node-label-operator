@@ -135,7 +135,6 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 	return &VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
 }
 
-// does this work the wayw it's supposed to?
 func (m VirtualMachineScaleSet) Update(ctx context.Context) error {
 	f, err := m.client.CreateOrUpdate(ctx, m.group, *m.vmss.Name, *m.vmss)
 	if err != nil {
@@ -233,7 +232,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		return ctrl.Result{}, nil
 	}
 
-	// do I also remove tags that have been deleted?
 	switch provider.ResourceType {
 	case VMSS:
 		// Add VMSS tags to node
@@ -287,6 +285,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 	}
 
 	// assign all labels on Node to VMSS, if not already there
+	// delete if node precedence?
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
 		// I should only update if there are changes to labels
 		tags, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
@@ -347,7 +346,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
-	changed := false
+	// should I be copying node.Labels or starting out empty?
 	newLabels := map[string]*string{} // hoping this will let me do null
 	for tagName, tagVal := range computeResource.Tags() {
 		if !ValidLabelName(tagName) {
@@ -360,14 +359,12 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 			// add tag as label
 			log.V(1).Info("applying tags to nodes", "tagName", tagName, "tagVal", *tagVal)
 			newLabels[validLabelName] = tagVal
-			changed = true
 		} else if labelVal != *tagVal {
 			switch configOptions.ConflictPolicy {
 			case ARMPrecedence:
 				// set label anyway
 				log.V(1).Info("overriding existing node label with ARM tag", "tagName", tagName, "tagVal", tagVal)
 				newLabels[validLabelName] = tagVal
-				changed = true
 			case NodePrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
@@ -383,7 +380,8 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	}
 
 	// delete labels if tag has been deleted
-	if configOptions.LabelPrefix != "" {
+	// if conflict policy is node precedence (which it will most likely not be), then don't delete tags if they exist on node
+	if configOptions.LabelPrefix != "" && (configOptions.ConflictPolicy == ARMPrecedence || configOptions.ConflictPolicy == Ignore) {
 		for labelFullName, labelVal := range node.Labels {
 			if HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
 				// check if exists on vm/vmss
@@ -391,15 +389,15 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 				_, ok := computeResource.Tags()[labelName]
 				if !ok { // if label doesn't exist on vm/vmss, delete
 					log.V(1).Info("deleting label from node", "label name", labelFullName, "label value", labelVal)
-					// do I have to set to 'null' somehow? how do I do that?
-					newLabels[labelFullName] = nil
-					changed = true
+					// for some reason I need both deletes and I don't know why...
+					delete(node.Labels, labelFullName)
+					newLabels[labelFullName] = nil // I think this becomes 'null' in JSON
 				}
 			}
 		}
 	}
 
-	if !changed { // to avoid unnecessary patching
+	if len(newLabels) == 0 { // to avoid unnecessary patching
 		return nil, nil
 	}
 

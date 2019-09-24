@@ -6,7 +6,6 @@ package controller
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"testing"
 	"time"
 
@@ -42,29 +41,31 @@ func (c FakeComputeResource) SetTag(name string, value *string) {
 // ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	var vals = [2]string{"test", "hr"}
+	var mapVals1 = map[string]string{"env": vals[0], "dept": vals[1]}
+	var mapVals2 = map[string]string{"env": vals[0]}
 	var armTagsTest = []struct {
-		name           string
-		tags           map[string]*string
-		labels         map[string]string
-		expectedLabels map[string]string
+		name                string
+		tags                map[string]*string
+		labels              map[string]string
+		expectedPatchLabels map[string]string
 	}{
 		{
 			"node1", // starting with no labels on node
-			map[string]*string{"env": &vals[0], "dept": &vals[1]},
+			labelMapToTagMap(mapVals1),
 			map[string]string{},
-			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0], labelWithPrefix("dept", DefaultLabelPrefix): vals[1]},
 		},
 		{
 			"node2",
-			map[string]*string{"env": &vals[0], "dept": &vals[1]},
+			labelMapToTagMap(mapVals1),
 			map[string]string{"favfruit": "banana"}, // won't be contained in patch though it shouldn't go away
-			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0], labelWithPrefix("dept", DefaultLabelPrefix): vals[1]},
 		},
 		{
 			"node3", // example of deleting a tag
-			map[string]*string{"env": &vals[0]},
-			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
-			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0]},
+			labelMapToTagMap(mapVals2),
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0], labelWithPrefix("dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): vals[0]},
 		},
 		// should also have test of changing value of tag that exists
 		// have node with labels with different prefixes maybe
@@ -76,7 +77,6 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	computeResource := NewFakeComputeResource()
 
 	for _, tt := range armTagsTest {
-		// do stuff
 		t.Run(tt.name, func(t *testing.T) {
 			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
@@ -93,20 +93,19 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			}
 			metadata, ok := spec["metadata"].(map[string]interface{})
 			assert.True(t, ok)
-			// labels, ok := metadata["labels"].(map[string]*string)
 			labels, ok := metadata["labels"].(map[string]interface{})
 			assert.True(t, ok)
-			assert.Equal(t, len(tt.expectedLabels), len(labels))
-			fmt.Println(len(labels)) // not good that this is zero...
-			for k, _ := range tt.expectedLabels {
-				// val, ok := node.Labels[k]
+			assert.Equal(t, len(tt.expectedPatchLabels), len(labels))
+			for k, _ := range tt.expectedPatchLabels {
 				_, ok := labels[k]
-				assert.True(t, ok)
-				// assert.True(t, val != nil)
-				// fmt.Println(*val)
-				// _, ok = val.(*string)
-				// assert.True(t, ok)
-				// assert.Equal(t, v, *labelVal)
+				_, existed := node.Labels[k]
+				assert.True(t, (!existed && ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
+				// ideally would check value here
+				// if !existed && ok {
+				// 	_, ok := vptr.(*string)
+				// 	assert.True(t, !ok) // this should be ok though
+				// 	assert.Equal(t, v, *vptr)
+				// }
 			}
 		})
 	}
@@ -114,10 +113,6 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 
 func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 	labels1 := map[string]string{"favfruit": "banana", "favveg": "broccoli"}
-	tags1 := map[string]*string{}
-	for key, val := range labels1 {
-		tags1[key] = &val
-	}
 	var nodeLabelsTest = []struct {
 		name         string
 		labels       map[string]string
