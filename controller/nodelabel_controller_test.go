@@ -96,7 +96,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			labels, ok := metadata["labels"].(map[string]interface{})
 			assert.True(t, ok)
 			assert.Equal(t, len(tt.expectedPatchLabels), len(labels))
-			for k, _ := range tt.expectedPatchLabels {
+			for k := range tt.expectedPatchLabels {
 				_, ok := labels[k]
 				_, existed := node.Labels[k]
 				assert.True(t, (!existed && ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
