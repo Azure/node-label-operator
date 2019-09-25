@@ -1,13 +1,15 @@
 #!/bin/bash
 
+# exit if unsuccessful at any step
+set -e
+set -o pipefail
+
 NAME=node-label-aks-engine
 RESOURCE_GROUP=${NAME}-rg
-
-az group create --name $RESOURCE_GROUP --location westus2 
-
-# files
 AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
 AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
+
+az group create --name $RESOURCE_GROUP --location westus2 
 
 az ad sp create-for-rbac --role="Contributor" --scopes="/subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${RESOURCE_GROUP}" > $AZURE_AUTH_LOCATION
 if [ $? -eq 0 ]; then
@@ -21,18 +23,21 @@ fi
 AKS_ENGINE_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
 AKS_ENGINE_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
 
+if [ -d "${PWD}/tests/aks-engine/_output/${NAME}-cluster" ]; then
+    rm -rf ${PWD}/tests/aks-engine/_output/${NAME}-cluster
+fi
 aks-engine deploy --subscription-id $AZURE_SUBSCRIPTION_ID \
     --resource-group $RESOURCE_GROUP \
     --location westus2 \
     --dns-prefix ${NAME}-cluster \
     --api-model tests/aks-engine/kubernetes.json \
-    --output-directory "${PWD}/tests/aks-engine/_output" \
+    --output-directory "${PWD}/tests/aks-engine/_output/${NAME}-cluster" \
     --client-id $AKS_ENGINE_CLIENT_ID \
     --client-secret $AKS_ENGINE_CLIENT_SECRET \
     --set servicePrincipalProfile.clientId="${AKS_ENGINE_CLIENT_ID}" \
     --set servicePrincipalProfile.secret="${AKS_ENGINE_CLIENT_SECRET}"
 
-KUBECONFIG="${PWD}/tests/aks-engine/_output/${NAME}-cluster/kubeconfig/kubeconfig.westus2.json"
+export KUBECONFIG="${PWD}/tests/aks-engine/_output/${NAME}-cluster/kubeconfig/kubeconfig.westus2.json"
 
 # create MSI
 
@@ -67,7 +72,7 @@ fi
 
 # create aadpodidentitybinding.yaml in order to create AzureIdentityBinding
 sed 's/<binding-name>/'"${NAME}"'-identity-binding/g' samples/aadpodidentitybinding.yaml | \
-    sed 's/<identity-name>/'"${NAME}"'-identity/g' \
+    sed 's/<identity-name>/'"${NAME}"'-identity/g' | \
     sed 's/<selector-name>/node-label-operator/g' \
     > tests/aks-engine/aadpodidentitybinding.yaml
 if [ $? -eq 0 ]; then
