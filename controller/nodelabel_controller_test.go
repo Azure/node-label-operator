@@ -5,7 +5,7 @@ package controller
 
 import (
 	"context"
-	"fmt"
+	"encoding/json"
 	"testing"
 	"time"
 
@@ -25,10 +25,6 @@ func NewFakeComputeResource() FakeComputeResource {
 	return FakeComputeResource{tags: map[string]*string{}}
 }
 
-// func (c FakeComputeResource) Get(ctx context.Context, name string) (FakeComputeResource, error) {
-// 	return c, nil
-// }
-
 func (c FakeComputeResource) Update(ctx context.Context) error {
 	return nil
 }
@@ -44,19 +40,38 @@ func (c FakeComputeResource) SetTag(name string, value *string) {
 // I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
 // ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
-	var vals = [2]string{"test", "hr"}
+	// is the problem that I'm reading from same arrays?
 	var armTagsTest = []struct {
-		name           string
-		tags           map[string]*string
-		labels         map[string]string
-		expectedLabels map[string]string
+		name                string
+		tags                map[string]*string
+		labels              map[string]string
+		expectedPatchLabels map[string]string
 	}{
 		{
-			"node1",
-			map[string]*string{"env": &vals[0], "dept": &vals[1]},
+			"node1", // starting with no labels on node
+			labelMapToTagMap(map[string]string{"env": "test", "v": "1"}),
 			map[string]string{},
-			map[string]string{fmt.Sprintf("%s/env", DefaultLabelPrefix): vals[0], fmt.Sprintf("%s/dept", DefaultLabelPrefix): vals[1]},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
 		},
+		{
+			"node2",
+			labelMapToTagMap(map[string]string{"env": "test", "v": "1"}),
+			map[string]string{"favfruit": "banana"}, // won't be contained in patch though it shouldn't go away
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
+		},
+		{
+			"node3", // example of deleting a tag
+			labelMapToTagMap(map[string]string{"env": "test"}),
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
+			map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test"},
+		},
+		// {
+		// 	"node4", // changing a preexisting tag
+		// 	labelMapToTagMap(map[string]string{"env": "test", "v": "2"}),
+		// 	map[string]string{labelWithPrefix("env", DefaultLabelPrefix): "test", labelWithPrefix("v", DefaultLabelPrefix): "1"},
+		// 	map[string]string{labelWithPrefix("v", DefaultLabelPrefix): "2"},
+		// },
+		// have node with labels with different prefixes maybe
 	}
 
 	config := DefaultConfigOptions() // tag-to-node only
@@ -65,32 +80,43 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	computeResource := NewFakeComputeResource()
 
 	for _, tt := range armTagsTest {
-		// do stuff
 		t.Run(tt.name, func(t *testing.T) {
 			computeResource.tags = tt.tags
 			node := newTestNode(tt.name, tt.labels)
 
 			// I should probably check the return value of patch :/
-			_, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, &config)
+			patch, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, &config)
 			if err != nil {
 				t.Errorf("failed to apply tags to nodes: %q", err)
 			}
 
-			for k, v := range tt.expectedLabels {
-				val, ok := node.Labels[k]
-				assert.True(t, ok)
-				assert.Equal(t, v, val)
+			spec := map[string]interface{}{}
+			if err := json.Unmarshal(patch, &spec); err != nil {
+				t.Errorf("failed to unmarshal patch data into map")
+			}
+			metadata, ok := spec["metadata"].(map[string]interface{})
+			assert.True(t, ok)
+			labels, ok := metadata["labels"].(map[string]interface{})
+			assert.True(t, ok)
+			assert.Equal(t, len(tt.expectedPatchLabels), len(labels))
+			// for k, v := range tt.expectedPatchLabels {
+			// 	label, ok := labels[k]
+			// 	_, existed := node.Labels[k]
+			// 	assert.True(t, (ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
+			// 	if ok {
+			// 		assert.Equal(t, v, label.(string))
+			// 	}
+			// }
+			for k := range tt.expectedPatchLabels {
+				_, ok := labels[k]
+				_, existed := node.Labels[k]
+				assert.True(t, (ok && labels[k] != nil) || (existed && !ok && labels[k] == nil))
 			}
 		})
 	}
 }
 
 func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
-	labels1 := map[string]string{"favfruit": "banana", "favveg": "broccoli"}
-	tags1 := map[string]*string{}
-	for key, val := range labels1 {
-		tags1[key] = &val
-	}
 	var nodeLabelsTest = []struct {
 		name         string
 		labels       map[string]string
@@ -99,9 +125,15 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 	}{
 		{
 			"resource1",
-			labels1,
+			map[string]string{"favfruit": "banana", "favveg": "broccoli"},
 			map[string]*string{},
-			labelMapToTagMap(labels1),
+			labelMapToTagMap(map[string]string{"favfruit": "banana", "favveg": "broccoli"}),
+		},
+		{
+			"resource2",
+			map[string]string{"favfruit": "banana", "favveg": "broccoli", "favanimal": "gopher"},
+			labelMapToTagMap(map[string]string{"favanimal": "gopher"}),
+			labelMapToTagMap(map[string]string{"favfruit": "banana", "favveg": "broccoli"}),
 		},
 	}
 
@@ -122,12 +154,16 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 				t.Errorf("failed to apply labels to azure resources: %q", err)
 			}
 
-			for k, expected := range tt.expectedTags {
-				actual, ok := tags[k]
+			assert.Equal(t, len(tt.expectedTags), len(tags))
+			for k := range tt.expectedTags {
+				_, ok := tags[k]
 				assert.True(t, ok)
-				assert.Equal(t, expected, actual)
 			}
-
+			// for k, expected := range tt.expectedTags {
+			// 	actual, ok := tags[k]
+			// 	assert.True(t, ok)
+			// 	assert.Equal(t, *expected, *actual)
+			// }
 		})
 	}
 }
