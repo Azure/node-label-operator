@@ -3,18 +3,18 @@
 set -e
 set -o pipefail
 
-NAME=node-label-aks
-RESOURCE_GROUP=${NAME}-rg
-MC_RESOURCE_GROUP=MC_${RESOURCE_GROUP}_${NAME}-cluster_westus2
+export NAME=node-label-aks
+export RESOURCE_GROUP=${NAME}-rg
+export MC_RESOURCE_GROUP=MC_${RESOURCE_GROUP}_${NAME}-cluster_westus2
 
 # mkdir ~/aks 
-AZURE_AUTH_LOCATION=${PWD}/tests/aks/creds.json
-AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/identity.json
+export AZURE_AUTH_LOCATION=${PWD}/tests/aks/creds.json
+export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/identity.json
 
 az ad sp create-for-rbac --skip-assignment > $AZURE_AUTH_LOCATION
 
-AKS_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
-AKS_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
+export AKS_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
+export AKS_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
 
 az group create --name $RESOURCE_GROUP --location westus2
 
@@ -26,9 +26,9 @@ az aks create \
     --client-secret $AKS_CLIENT_SECRET \
     --generate-ssh-keys
 
-az aks get-credentials --resource-group $RESOURCE_GROUP --name ${NAME}-cluster --location westus2
+az aks get-credentials --resource-group $RESOURCE_GROUP --name ${NAME}-cluster
 
-export KUBECONFIG="$HOME/.kube/config" # is this necessary?
+export KUBECONFIG="$HOME/.kube/config"
 
 az identity create -g $MC_RESOURCE_GROUP -n ${NAME}-identity -o json > $AZURE_IDENTITY_LOCATION
 if [ $? -eq 0 ]; then
@@ -37,12 +37,12 @@ else
     echo "Creating identity for resource group ${RESOURCE_GROUP} failed"
 fi
 
-RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
-CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
-PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
+export RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
+export CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
+export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
 
 az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID
-az role assignment create --role "Contributor" --assignee $PRINCIPAL_ID --scope /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/$MC_RESOURCE_GROUP
+az role assignment create --role "Contributor" --assignee $PRINCIPAL_ID --scope /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${MC_RESOURCE_GROUP}
 
 # create aadpodidentity.yaml in order to create AzureIdentity
 sed 's/<subid>/'"${AZURE_SUBSCRIPTION_ID}"'/g' samples/aadpodidentity.yaml | \

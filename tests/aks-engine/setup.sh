@@ -4,10 +4,10 @@
 set -e
 set -o pipefail
 
-NAME=node-label-aks-engine
-RESOURCE_GROUP=${NAME}-rg
-AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
-AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
+export NAME=node-label-aks-engine
+export RESOURCE_GROUP=${NAME}-rg
+export AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
+export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
 
 az group create --name $RESOURCE_GROUP --location westus2 
 
@@ -20,8 +20,8 @@ fi
 
 # deploy aks-engine cluster
 
-AKS_ENGINE_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
-AKS_ENGINE_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
+export AKS_ENGINE_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
+export AKS_ENGINE_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
 
 if [ -d "${PWD}/tests/aks-engine/_output/${NAME}-cluster" ]; then
     rm -rf ${PWD}/tests/aks-engine/_output/${NAME}-cluster
@@ -48,9 +48,9 @@ else
     echo "Creating identity for resource group ${RESOURCE_GROUP} failed"
 fi
 
-RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
-CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
-PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
+export RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
+export CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
+export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
 
 # create roles
 az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID 
