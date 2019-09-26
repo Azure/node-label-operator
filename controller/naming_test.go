@@ -65,6 +65,25 @@ func TestValidLabelName(t *testing.T) {
 	}
 }
 
+func TestValidLabelVal(t *testing.T) {
+	var labelNameTests = []struct {
+		given    string
+		expected bool
+	}{
+		{"agentpool1", true},
+		{"Kubernetes:1.18.0", false},
+	}
+
+	for _, tt := range labelNameTests {
+		t.Run(tt.given, func(t *testing.T) {
+			valid := ValidLabelVal(tt.given)
+			if valid != tt.expected {
+				t.Errorf("given label value %q, got valid=%t, want valid=%t", tt.given, valid, tt.expected)
+			}
+		})
+	}
+}
+
 func TestConvertTagNameToValidLabelName(t *testing.T) {
 	var tagNameConversionTests = []struct {
 		given    string

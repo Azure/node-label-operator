@@ -27,6 +27,19 @@ func ValidLabelName(tagName string) bool {
 	return validLabelName(tagName)
 }
 
+// this shouldn't ever happen
+func ValidTagValue(labelVal string) bool {
+	return len(labelVal) > maxTagValLen
+}
+
+func ValidLabelVal(tagVal string) bool {
+	if len(tagVal) > maxLabelValLen {
+		return false
+	}
+	re := regexp.MustCompile("^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+	return re.MatchString(tagVal)
+}
+
 func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions) string {
 	// lstrip configOptions.TagPrefix if there
 	// don't forget to get rid of '.' after 'node.labels'... are there prefixes here?
@@ -42,10 +55,8 @@ func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions)
 
 	// must begin and end with alphanumeric character with -,_,. and alphanumerics in between
 
-	// must have prefix
-	// prefix must not be longer than 253 characters
-	result = labelWithPrefix(result, configOptions.LabelPrefix)
-	return result
+	// must have prefix, and prefix must not be longer than 253 characters
+	return labelWithPrefix(result, configOptions.LabelPrefix)
 }
 
 // assume validated??

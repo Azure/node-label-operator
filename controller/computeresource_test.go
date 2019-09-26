@@ -1,13 +1,25 @@
 package controller
 
-import "context"
+import (
+	"context"
+
+	"github.com/Azure/go-autorest/autorest/to"
+)
 
 type FakeComputeResource struct {
 	tags map[string]*string
 }
 
-func NewFakeComputeResource() FakeComputeResource {
-	return FakeComputeResource{tags: map[string]*string{}}
+func NewFakeComputeResourceEmptyTags() *FakeComputeResource {
+	return &FakeComputeResource{tags: map[string]*string{}}
+}
+
+func NewFakeComputeResource(labels map[string]string) *FakeComputeResource {
+	tagMap := map[string]*string{}
+	for key, val := range labels {
+		tagMap[key] = to.StringPtr(val)
+	}
+	return &FakeComputeResource{tags: tagMap}
 }
 
 func (c FakeComputeResource) Update(ctx context.Context) error {
