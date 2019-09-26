@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/Azure/node-label-operator/azure"
 )
 
@@ -278,7 +279,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
-	if len(computeResource.Tags()) > maxNumTags {
+	if len(computeResource.Tags()) >= maxNumTags {
 		log.V(0).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
 		return computeResource.Tags(), nil
 	}
@@ -286,11 +287,11 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
 		if !ValidTagName(labelName, *configOptions) {
-			// log.V(1).Info("invalid tag name", "label name", labelName)
+			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
 		if !ValidTagValue(labelVal) {
-			// log.V(1).Info("invalid tag name", "label name", labelName)
+			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
 		validTagName := ConvertLabelNameToValidTagName(labelName, *configOptions)
@@ -298,13 +299,13 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 		if !ok {
 			// add label as tag
 			log.V(1).Info("applying labels to Azure resource", "label name", labelName, "label value", labelVal)
-			newTags[validTagName] = &labelVal // should I be making a copy?
+			newTags[validTagName] = to.StringPtr(labelVal) // should I be making a copy?
 		} else if *tagVal != labelVal {
 			switch configOptions.ConflictPolicy {
 			case NodePrecedence:
 				// set tag anyway
 				log.V(1).Info("overriding existing ARM tag with node label", "label name", labelName, "label value", labelVal)
-				newTags[validTagName] = &labelVal // should I be making a copy?
+				newTags[validTagName] = to.StringPtr(labelVal) // should I be making a copy?
 			case ARMPrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
