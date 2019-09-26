@@ -17,26 +17,6 @@ import (
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-type FakeComputeResource struct {
-	tags map[string]*string
-}
-
-func NewFakeComputeResource() FakeComputeResource {
-	return FakeComputeResource{tags: map[string]*string{}}
-}
-
-func (c FakeComputeResource) Update(ctx context.Context) error {
-	return nil
-}
-
-func (c FakeComputeResource) Tags() map[string]*string {
-	return c.tags
-}
-
-func (c FakeComputeResource) SetTag(name string, value *string) {
-	c.tags[name] = value
-}
-
 // I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
 // ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
@@ -229,7 +209,7 @@ func TestTimeToUpdate(t *testing.T) {
 	}
 }
 
-// test helper functions	// test helper functions
+// test helper functions
 
 func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
 	return &ReconcileNodeLabel{
