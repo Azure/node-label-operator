@@ -244,7 +244,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 
 	// delete labels if tag has been deleted
 	// if conflict policy is node precedence (which it will most likely not be), then don't delete tags if they exist on node
-	if configOptions.LabelPrefix != "" && (configOptions.ConflictPolicy == ARMPrecedence || configOptions.ConflictPolicy == Ignore) {
+	if labelDeletionAllowed(configOptions) {
 		for labelFullName, labelVal := range node.Labels {
 			if HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
 				// check if exists on vm/vmss
@@ -419,4 +419,7 @@ func labelPatchWithDelete(labels map[string]*string) ([]byte, error) {
 			"labels": labels,
 		},
 	})
+}
+func labelDeletionAllowed(configOptions *ConfigOptions) bool {
+	return configOptions.LabelPrefix != "" && (configOptions.ConflictPolicy == ARMPrecedence || configOptions.ConflictPolicy == Ignore)
 }
