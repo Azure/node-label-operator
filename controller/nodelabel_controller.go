@@ -287,7 +287,7 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
-		if !ValidTagValue(labelVal) {
+		if !ValidTagVal(labelVal) {
 			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
@@ -296,13 +296,13 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 		if !ok {
 			// add label as tag
 			log.V(1).Info("applying labels to Azure resource", "label name", labelName, "label value", labelVal)
-			newTags[validTagName] = to.StringPtr(labelVal) // should I be making a copy?
+			newTags[validTagName] = to.StringPtr(labelVal)
 		} else if *tagVal != labelVal {
 			switch configOptions.ConflictPolicy {
 			case NodePrecedence:
 				// set tag anyway
 				log.V(1).Info("overriding existing ARM tag with node label", "label name", labelName, "label value", labelVal)
-				newTags[validTagName] = to.StringPtr(labelVal) // should I be making a copy?
+				newTags[validTagName] = to.StringPtr(labelVal)
 			case ARMPrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)

@@ -28,7 +28,7 @@ func ValidLabelName(tagName string) bool {
 }
 
 // this shouldn't ever happen
-func ValidTagValue(labelVal string) bool {
+func ValidTagVal(labelVal string) bool {
 	return len(labelVal) <= maxTagValLen
 }
 
@@ -53,16 +53,12 @@ func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions)
 		result = result[:maxLabelNameLen]
 	}
 
-	// must begin and end with alphanumeric character with -,_,. and alphanumerics in between
-
-	// must have prefix, and prefix must not be longer than 253 characters
 	return labelWithPrefix(result, configOptions.LabelPrefix)
 }
 
-// assume validated??
 func ConvertLabelNameToValidTagName(labelName string, configOptions ConfigOptions) string {
 	// get rid of '/' and other characters.
-	// also detect if 'azure.tags' is in the name to get rid of it? also get rid of '/' after 'azure.tags'
+	// also detect if 'azure.tags/' or other prefix is in the name to get rid of it
 	// don't add if label name is a truncated version of a tag
 	result := labelName
 	if strings.HasPrefix(labelName, fmt.Sprintf("%s/", configOptions.LabelPrefix)) {
