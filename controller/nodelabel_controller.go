@@ -74,9 +74,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.Error(err, "failed to load options from config file")
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
-	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
-	log.V(1).Info("configOptions", "tag prefix", configOptions.TagPrefix)
-	log.V(1).Info("configOptions", "min sync period", configOptions.MinSyncPeriod)
 
 	configMinSyncPeriod, err := time.ParseDuration(configOptions.MinSyncPeriod)
 	if err != nil {
@@ -138,7 +135,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
-		// I should only update if there are changes to labels
+		// only update if there are changes to labels
 		patch, err := r.applyTagsToNodes(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
@@ -152,7 +149,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 
 	// assign all labels on Node to VMSS, if not already there
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
-		// I should only update if there are changes to labels
+		// only update if there are changes to labels
 		tags, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err

@@ -29,7 +29,7 @@ func ValidLabelName(tagName string) bool {
 
 // this shouldn't ever happen
 func ValidTagValue(labelVal string) bool {
-	return len(labelVal) > maxTagValLen
+	return len(labelVal) <= maxTagValLen
 }
 
 func ValidLabelVal(tagVal string) bool {

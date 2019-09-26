@@ -6,6 +6,8 @@ package controller
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -18,10 +20,7 @@ import (
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// I need a way of creating configurations of vms and nodes that have tags and checking that they are assigned correctly
-// ideally without having to be e2e... can I fake all of this somehow? current issue is reconciler object
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
-	// is the problem that I'm reading from same arrays?
 	var armTagsTest = []struct {
 		name                string
 		tags                map[string]*string
@@ -82,7 +81,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			},
 		},
 		{
-			"node5", // have node with labels with different prefixes maybe
+			"node5", // have node with labels with different prefixes
 			map[string]*string{
 				"role": to.StringPtr("master"),
 			},
@@ -93,10 +92,20 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				labelWithPrefix("role", DefaultLabelPrefix): "master",
 			},
 		},
+		{
+			"node6", // invalid labels
+			map[string]*string{
+				"orchestrator": to.StringPtr("Kubernetes:1.18.0"),
+				"agentPool":    to.StringPtr("agentpool1"),
+			},
+			map[string]string{},
+			map[string]string{
+				labelWithPrefix("agentPool", DefaultLabelPrefix): "agentpool1",
+			},
+		},
 	}
 
 	config := DefaultConfigOptions() // tag-to-node only
-
 	r := NewFakeNodeLabelReconciler()
 
 	for _, tt := range armTagsTest {
@@ -130,76 +139,84 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 	}
 }
 
-// func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
-// 	var nodeLabelsTest = []struct {
-// 		name         string
-// 		labels       map[string]string
-// 		tags         map[string]*string
-// 		expectedTags map[string]*string
-// 	}{
-// 		{
-// 			"resource1",
-// 			map[string]string{
-// 				"favfruit": "banana",
-// 				"favveg":   "broccoli",
-// 			},
-// 			map[string]*string{},
-// 			map[string]*string{
-// 				"favfruit": to.StringPtr("banana"),
-// 				"favveg":   to.StringPtr("broccoli"),
-// 			},
-// 		},
-// 		{
-// 			"resource2",
-// 			map[string]string{
-// 				"favfruit":  "banana",
-// 				"favveg":    "broccoli",
-// 				"favanimal": "gopher",
-// 			},
-// 			map[string]*string{
-// 				"favanimal": to.StringPtr("gopher"),
-// 			},
-// 			map[string]*string{
-// 				"favfruit": to.StringPtr("banana"),
-// 				"favveg":   to.StringPtr("broccoli"),
-// 			},
-// 		},
-// 	}
+func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
+	var nodeLabelsTest = []struct {
+		name         string
+		labels       map[string]string
+		tags         map[string]*string
+		expectedTags map[string]*string
+	}{
+		{
+			"resource1",
+			map[string]string{
+				"favfruit": "banana",
+				"favveg":   "broccoli",
+			},
+			map[string]*string{},
+			map[string]*string{
+				"favfruit": to.StringPtr("banana"),
+				"favveg":   to.StringPtr("broccoli"),
+			},
+		},
+		{
+			"resource2", // only include tags that haven't been added yet
+			map[string]string{
+				"favfruit":  "banana",
+				"favveg":    "broccoli",
+				"favanimal": "gopher",
+			},
+			map[string]*string{
+				"favanimal": to.StringPtr("gopher"),
+			},
+			map[string]*string{
+				"favfruit": to.StringPtr("banana"),
+				"favveg":   to.StringPtr("broccoli"),
+			},
+		},
+		{
+			"resource3", // invalid tags
+			map[string]string{
+				"fruits/favfruit": "banana",
+				"favanimal":       "gopher",
+			},
+			map[string]*string{
+				"favveg": to.StringPtr("broccoli"),
+			},
+			map[string]*string{
+				"favanimal": to.StringPtr("gopher"),
+			},
+		},
+	}
 
-// 	config := DefaultConfigOptions()
-// 	config.SyncDirection = NodeToARM
-// 	config.ConflictPolicy = NodePrecedence
-// 	r := NewFakeNodeLabelReconciler()
+	config := DefaultConfigOptions()
+	config.SyncDirection = NodeToARM
+	config.ConflictPolicy = NodePrecedence
+	r := NewFakeNodeLabelReconciler()
 
-// 	// create a fake ComputeResource and fake Node for each test and use those I guess
-// 	for _, tt := range nodeLabelsTest {
-// 		t.Run(tt.name, func(t *testing.T) {
-// 			node := NewFakeNode(tt.name, tt.labels)
-// 			computeResource := NewFakeComputeResource(tt.tags)
+	for _, tt := range nodeLabelsTest {
+		t.Run(tt.name, func(t *testing.T) {
+			node := NewFakeNode(tt.name, tt.labels)
+			computeResource := NewFakeComputeResource(tt.tags)
 
-// 			tags, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, &config)
-// 			if err != nil {
-// 				t.Errorf("failed to apply labels to azure resources: %q", err)
-// 			}
-// 			fmt.Println(tt.labels)
-// 			fmt.Println(tt.tags)
-// 			fmt.Println(tags)
+			tags, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, &config)
+			if err != nil {
+				t.Errorf("failed to apply labels to azure resources: %q", err)
+			}
+			assert.True(t, tags != nil) // should only be nil if no changes
 
-// 			assert.Equal(t, len(tt.expectedTags), len(tags))
-// 			for k := range tt.expectedTags {
-// 				_, ok := tags[k]
-// 				assert.True(t, ok)
-// 			}
-// 			// for k, expected := range tt.expectedTags {
-// 			// 	actual, ok := tags[k]
-// 			// 	assert.True(t, ok)
-// 			// 	assert.Equal(t, *expected, *actual)
-// 			// }
-// 		})
-// 	}
-// }
+			fmt.Println(node.Labels)
+			fmt.Println(computeResource.Tags())
+			fmt.Println(tags)
 
-// test helper functions
+			for k, expected := range tt.expectedTags {
+				actual, ok := tags[k]
+				assert.True(t, ok)
+				assert.Equal(t, *expected, *actual)
+			}
+		})
+	}
+}
+
 func TestLastUpdateLabel(t *testing.T) {
 	var lastUpdateLabelTest = []struct {
 		name          string
@@ -248,6 +265,11 @@ func TestTimeToUpdate(t *testing.T) {
 			map[string]string{"last-update": "2019-09-23T20.01.43Z", "min-sync-period": "1m"},
 			true,
 		},
+		{
+			"node2",
+			map[string]string{"last-update": strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "."), "min-sync-period": "100h"},
+			false,
+		},
 	}
 
 	for _, tt := range timeToUpdateTest {
@@ -255,6 +277,38 @@ func TestTimeToUpdate(t *testing.T) {
 			node := NewFakeNode(tt.name, tt.labels)
 
 			actual := timeToUpdate(node)
+			assert.Equal(t, tt.expected, actual)
+		})
+	}
+}
+
+func TestLabelDeletionAllowed(t *testing.T) {
+	var labelDeletionAllowedTest = []struct {
+		name          string
+		configOptions *ConfigOptions
+		expected      bool
+	}{
+		{
+			"test1",
+			&ConfigOptions{
+				LabelPrefix:    DefaultLabelPrefix,
+				ConflictPolicy: ARMPrecedence,
+			},
+			true,
+		},
+		{
+			"test2",
+			&ConfigOptions{
+				LabelPrefix:    "cool-custom-label-prefix",
+				ConflictPolicy: Ignore,
+			},
+			true,
+		},
+	}
+
+	for _, tt := range labelDeletionAllowedTest {
+		t.Run(tt.name, func(t *testing.T) {
+			actual := labelDeletionAllowed(tt.configOptions)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}
@@ -274,20 +328,10 @@ func NewFakeNodeLabelReconciler() *ReconcileNodeLabel {
 func NewFakeNode(name string, labels map[string]string) *corev1.Node {
 	node := &corev1.Node{}
 	node.Name = name
-	if labels != nil {
-		node.Labels = labels
-	}
+	node.Labels = labels
 	return node
 }
 
 func defaultNamespacedName(name string) types.NamespacedName {
 	return types.NamespacedName{Name: name, Namespace: "default"}
 }
-
-// func labelMapToTagMap(labels map[string]string) map[string]*string {
-// 	tags := map[string]*string{}
-// 	for key, val := range labels {
-// 		tags[key] = to.StringPtr(val)
-// 	}
-// 	return tags
-// }
