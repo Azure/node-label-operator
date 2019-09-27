@@ -24,6 +24,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/Azure/node-label-operator/azure"
 )
 
@@ -73,9 +74,6 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.Error(err, "failed to load options from config file")
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
-	log.V(1).Info("configOptions", "syncDirection", configOptions.SyncDirection)
-	log.V(1).Info("configOptions", "tag prefix", configOptions.TagPrefix)
-	log.V(1).Info("configOptions", "min sync period", configOptions.MinSyncPeriod)
 
 	configMinSyncPeriod, err := time.ParseDuration(configOptions.MinSyncPeriod)
 	if err != nil {
@@ -137,7 +135,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 	}
 
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
-		// I should only update if there are changes to labels
+		// only update if there are changes to labels
 		patch, err := r.applyTagsToNodes(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
@@ -151,7 +149,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 
 	// assign all labels on Node to VMSS, if not already there
 	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
-		// I should only update if there are changes to labels
+		// only update if there are changes to labels
 		tags, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
 		if err != nil {
 			return err
@@ -216,6 +214,10 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 			log.V(0).Info("invalid label name", "tag name", tagName)
 			continue
 		}
+		if !ValidLabelVal(*tagVal) {
+			log.V(0).Info("invalid label value", "tag value", *tagVal)
+			continue
+		}
 		validLabelName := ConvertTagNameToValidLabelName(tagName, *configOptions)
 		labelVal, ok := node.Labels[validLabelName]
 		if !ok {
@@ -274,7 +276,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
-	if len(computeResource.Tags()) > maxNumTags {
+	if len(computeResource.Tags()) >= maxNumTags {
 		log.V(0).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
 		return computeResource.Tags(), nil
 	}
@@ -282,7 +284,11 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
 		if !ValidTagName(labelName, *configOptions) {
-			// log.V(1).Info("invalid tag name", "label name", labelName)
+			log.V(2).Info("invalid tag name", "label name", labelName)
+			continue
+		}
+		if !ValidTagVal(labelVal) {
+			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
 		validTagName := ConvertLabelNameToValidTagName(labelName, *configOptions)
@@ -290,13 +296,13 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 		if !ok {
 			// add label as tag
 			log.V(1).Info("applying labels to Azure resource", "label name", labelName, "label value", labelVal)
-			newTags[validTagName] = &labelVal
+			newTags[validTagName] = to.StringPtr(labelVal)
 		} else if *tagVal != labelVal {
 			switch configOptions.ConflictPolicy {
 			case NodePrecedence:
 				// set tag anyway
 				log.V(1).Info("overriding existing ARM tag with node label", "label name", labelName, "label value", labelVal)
-				newTags[validTagName] = &labelVal
+				newTags[validTagName] = to.StringPtr(labelVal)
 			case ARMPrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)

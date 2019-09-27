@@ -27,6 +27,19 @@ func ValidLabelName(tagName string) bool {
 	return validLabelName(tagName)
 }
 
+// this shouldn't ever happen
+func ValidTagVal(labelVal string) bool {
+	return len(labelVal) <= maxTagValLen
+}
+
+func ValidLabelVal(tagVal string) bool {
+	if len(tagVal) > maxLabelValLen {
+		return false
+	}
+	re := regexp.MustCompile("^(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])?$")
+	return re.MatchString(tagVal)
+}
+
 func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions) string {
 	// lstrip configOptions.TagPrefix if there
 	// don't forget to get rid of '.' after 'node.labels'... are there prefixes here?
@@ -40,18 +53,12 @@ func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions)
 		result = result[:maxLabelNameLen]
 	}
 
-	// must begin and end with alphanumeric character with -,_,. and alphanumerics in between
-
-	// must have prefix
-	// prefix must not be longer than 253 characters
-	result = labelWithPrefix(result, configOptions.LabelPrefix)
-	return result
+	return labelWithPrefix(result, configOptions.LabelPrefix)
 }
 
-// assume validated??
 func ConvertLabelNameToValidTagName(labelName string, configOptions ConfigOptions) string {
 	// get rid of '/' and other characters.
-	// also detect if 'azure.tags' is in the name to get rid of it? also get rid of '/' after 'azure.tags'
+	// also detect if 'azure.tags/' or other prefix is in the name to get rid of it
 	// don't add if label name is a truncated version of a tag
 	result := labelName
 	if strings.HasPrefix(labelName, fmt.Sprintf("%s/", configOptions.LabelPrefix)) {

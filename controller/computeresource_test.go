@@ -1,13 +1,15 @@
 package controller
 
-import "context"
+import (
+	"context"
+)
 
 type FakeComputeResource struct {
 	tags map[string]*string
 }
 
-func NewFakeComputeResource() FakeComputeResource {
-	return FakeComputeResource{tags: map[string]*string{}}
+func NewFakeComputeResource(labelMap map[string]*string) *FakeComputeResource {
+	return &FakeComputeResource{tags: labelMap}
 }
 
 func (c FakeComputeResource) Update(ctx context.Context) error {
