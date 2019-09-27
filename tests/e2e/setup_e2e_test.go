@@ -4,6 +4,7 @@
 package tests
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -15,6 +16,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/Azure/node-label-operator/azure"
 )
 
 var Scheme = runtime.NewScheme()
@@ -29,6 +32,7 @@ type Cluster struct {
 	KubeConfigPath string
 	SubscriptionID string
 	ResourceGroup  string
+	ResourceType   string
 }
 
 type TestSuite struct {
@@ -42,7 +46,6 @@ func initialize(c *Cluster) error {
 	if c.KubeConfigPath == "" {
 		return errors.New("missing parameters: KubeConfigPath must be set")
 	}
-	// get these as environment variables??
 	// do I want to create the test cluster(s) here somehow?
 	return nil
 }
@@ -63,4 +66,16 @@ func (s *TestSuite) SetupSuite() {
 	cl, err := client.New(loadConfigOrFail(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
 	require.NoError(s.T(), err)
 	s.client = cl
+
+	// better to get metadata endpoint?
+	nodeList := &corev1.NodeList{}
+	err = cl.List(context.Background(), nodeList, client.InNamespace("default"))
+	require.NoError(s.T(), err)
+	require.NotEmpty(s.T(), nodeList.Items)
+	resource, err := azure.ParseProviderID(nodeList.Items[0].Spec.ProviderID)
+	require.NoError(s.T(), err)
+
+	s.SubscriptionID = resource.SubscriptionID
+	s.ResourceGroup = resource.ResourceGroup
+	s.ResourceType = resource.ResourceType
 }

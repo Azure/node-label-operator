@@ -7,6 +7,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/Azure/node-label-operator/azure"
 	"github.com/Azure/node-label-operator/controller"
 	"github.com/stretchr/testify/assert"
@@ -20,17 +21,16 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
-	keys := [3]string{"fruit1", "fruit2", "fruit3"}
-	values := [3]string{"watermelon", "dragonfruit", "banana"}
-	tags := map[string]*string{}
-	for i, key := range keys {
-		tags[key] = &values[i]
+	tags := map[string]*string{
+		"fruit1": to.StringPtr("watermelon"),
+		"fruit2": to.StringPtr("dragonfruit"),
+		"fruit3": to.StringPtr("banana"),
 	}
 
 	// make sure configmap is set up properly
 
 	// get tags
-	vmssClient, err := azure.NewScaleSetClient(s.SubscriptionID)
+	vmssClient, err := azure.NewScaleSetClient(s.SubscriptionID) // I should check resource type here
 	require.NoError(err)
 	vmssList, err := vmssClient.List(context.Background(), s.ResourceGroup)
 	require.NoError(err)
@@ -64,7 +64,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 		for key, val := range tags {
 			result, ok := updatedVmss.Tags[key]
 			assert.True(ok)
-			assert.Equal(result, val)
+			assert.Equal(*result, *val)
 		}
 	}
 
@@ -97,19 +97,21 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 		assert.Equal(len(updatedVmss.Tags), 0)
 	}
 
-	// clean up nodes by deleting labels
+	time.Sleep(5 * time.Minute) // wait for labels to be removed
+
+	// check that corresponding labels were deleted
+	// do I have to "List" nodes again?
 	for key := range tags {
-		// delete from every node
 		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
 		for _, node := range nodeList.Items {
+			// check that tag was deleted
 			_, ok := node.Labels[validLabelName]
-			assert.True(ok)
-			delete(node.Labels, validLabelName)
+			assert.False(ok)
 		}
 	}
 	for _, node := range nodeList.Items {
-		err = s.client.Update(context.Background(), &node)
-		require.NoError(err)
+		// Checking to see if original labels are there. Can I assume this is true?
+		assert.Equal(len(node.Labels), numLabels[node.Name])
 	}
 }
 
@@ -117,7 +119,11 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
-	labels := map[string]string{"veg1": "zucchini", "veg2": "swiss chard", "veg3": "jalapeno"}
+	labels := map[string]string{
+		"veg1": "zucchini",
+		"veg2": "swiss chard",
+		"veg3": "jalapeno",
+	}
 
 	// make sure config map is set up properly?
 
@@ -151,11 +157,12 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 		for key, val := range labels {
 			result, ok := vmss.Tags[key]
 			assert.True(ok)
-			assert.Equal(result, val)
+			assert.Equal(*result, val)
 		}
 	}
 
 	// clean up vmss by deleting tags
+	// if I implement deleting labels from vmss, then this will need to be a check instead of removing them
 	for _, vmss := range vmssList.Values() {
 		vmss.Tags = map[string]*string{}
 		// update
@@ -179,6 +186,58 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 }
 
 func (s *TestSuite) TestTwoWaySync() {
+	assert := assert.New(s.T())
+	require := require.New(s.T())
+
+	tags := map[string]*string{
+		"favveg":    to.StringPtr("broccoli"),
+		"favanimal": to.StringPtr("gopher"),
+	}
+
+	// get vmss
+	vmssClient, err := azure.NewScaleSetClient(s.SubscriptionID)
+	require.NoError(err)
+	vmssList, err := vmssClient.List(context.Background(), s.ResourceGroup)
+	require.NoError(err)
+	s.T().Log(vmssList.Values())
+	assert.NotEqual(len(vmssList.Values()), 0)
+
+	// update tags
+	for _, vmss := range vmssList.Values() {
+		vmss.Tags = tags
+		// update
+		f, err := vmssClient.CreateOrUpdate(context.Background(), s.ResourceGroup, *vmss.Name, vmss)
+		require.NoError(err)
+		err = f.WaitForCompletionRef(context.Background(), vmssClient.Client)
+		require.NoError(err)
+		updatedVmss, err := f.Result(vmssClient)
+		require.NoError(err)
+		// check that vmss tags have been updated
+		for key, val := range tags {
+			result, ok := updatedVmss.Tags[key]
+			assert.True(ok)
+			assert.Equal(*result, *val)
+		}
+	}
+
+	labels := map[string]string{
+		"favfruit": "banana",
+		"favfungi": "shiitake mushroom",
+	}
+
+	// get nodes
+	nodeList := &corev1.NodeList{}
+	err = s.client.List(context.Background(), nodeList, client.InNamespace("node-label-operator"))
+	require.NoError(err)
+	assert.NotEqual(len(nodeList.Items), 0)
+
+	// update node labels
+	for _, node := range nodeList.Items {
+		node.Labels = labels
+		err = s.client.Update(context.Background(), &node)
+		require.NoError(err)
+	}
+
 }
 
 func (s *TestSuite) TestInvalidTagsToLabels() {
