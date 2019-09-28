@@ -29,8 +29,8 @@ import (
 )
 
 const (
-	lastUpdateLabel    string        = "last-update"
-	minSyncPeriodLabel string        = "min-sync-period"
+	lastUpdateLabel    string        = "node-label-operator/last-update"
+	minSyncPeriodLabel string        = "node-label-operator/min-sync-period"
 	FiveMinutes        time.Duration = time.Minute * 5
 )
 

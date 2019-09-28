@@ -77,5 +77,5 @@ func (s *TestSuite) SetupSuite() {
 
 	s.SubscriptionID = resource.SubscriptionID
 	s.ResourceGroup = resource.ResourceGroup
-	s.ResourceType = resource.ResourceType
+	s.ResourceType = resource.ResourceType // ends up depending on which node is chosen first for aks-engine
 }

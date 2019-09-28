@@ -41,6 +41,10 @@ func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName stri
 	return &VirtualMachine{group: resourceGroup, client: &client, vm: &vm}, nil
 }
 
+func NewVMInitialized(ctx context.Context, resourceGroup string, c *compute.VirtualMachinesClient, v *compute.VirtualMachine) *VirtualMachine {
+	return &VirtualMachine{client: c, vm: v}
+}
+
 func (m VirtualMachine) Update(ctx context.Context) error {
 	f, err := m.client.CreateOrUpdate(ctx, m.group, *m.vm.Name, *m.vm)
 	if err != nil {
@@ -97,6 +101,10 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 	vmss = VMSSUserAssignedIdentity(vmss)
 
 	return &VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
+}
+
+func NewVMSSInitialized(ctx context.Context, resourceGroup string, c *compute.VirtualMachineScaleSetsClient, v *compute.VirtualMachineScaleSet) *VirtualMachineScaleSet {
+	return &VirtualMachineScaleSet{client: c, vmss: v}
 }
 
 func (m VirtualMachineScaleSet) Update(ctx context.Context) error {

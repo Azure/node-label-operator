@@ -262,12 +262,12 @@ func TestTimeToUpdate(t *testing.T) {
 		},
 		{
 			"node2",
-			map[string]string{"last-update": "2019-09-23T20.01.43Z", "min-sync-period": "1m"},
+			map[string]string{"node-label-operator/last-update": "2019-09-23T20.01.43Z", "node-label-operator/min-sync-period": "1m"},
 			true,
 		},
 		{
-			"node2",
-			map[string]string{"last-update": strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "."), "min-sync-period": "100h"},
+			"node3",
+			map[string]string{"node-label-operator/last-update": strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "."), "node-label-operator/min-sync-period": "100h"},
 			false,
 		},
 	}

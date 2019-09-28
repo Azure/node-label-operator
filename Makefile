@@ -53,6 +53,12 @@ lint:
 	golangci-lint run -j 2 $(EXTRA_ARGS)
 .PHONY: lint
 
+# e2e-setup:
+
+e2e-test:
+	go test ./tests/e2e/... -timeout 0 -v
+.PHONY: e2e-run-tests
+
 e2e-cleanup-all: are-you-sure
 	az group list --subscription $(E2E_SUBSCRIPTION) --tag owned-by=node-label-operator --query "[].name" --output tsv \
 		| xargs -I @@ sh -c 'echo "deleting @@ ..."; az group delete --subscription ${E2E_SUBSCRIPTION} --name @@ --yes --no-wait;'
