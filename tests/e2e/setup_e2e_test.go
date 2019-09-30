@@ -97,6 +97,7 @@ func (s *TestSuite) TearDownSuite() {
 	configOptions.ConflictPolicy = controller.ARMPrecedence
 	configOptions.MinSyncPeriod = "1m"
 	configMap, err = controller.GetConfigMapFromConfigOptions(configOptions)
+	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
 	require.NoError(s.T(), err)
 

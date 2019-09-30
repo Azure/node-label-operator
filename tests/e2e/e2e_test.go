@@ -74,10 +74,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	numStartingTags := len(vmss.Tags)
 
 	// get number of labels on each node
-	numStartingLabels := map[string]int{}
-	for _, node := range nodeList.Items {
-		numStartingLabels[node.Name] = len(node.Labels)
-	}
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 
 	vmssNodes := s.GetNodesOnVMSS(&vmss, nodeList)
 	s.T().Logf("Found %d nodes on vmss %s", len(vmssNodes), *vmss.Name)
@@ -175,10 +172,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	// numStartingTags := len(vmss.Tags)
 
 	// get number of labels on each node
-	numStartingLabels := map[string]int{}
-	for _, node := range nodeList.Items {
-		numStartingLabels[node.Name] = len(node.Labels)
-	}
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 
 	// get only nodes on the chosen vmss
 	vmssNodes := s.GetNodesOnVMSS(&vmss, nodeList)
@@ -272,10 +266,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	numStartingTags := len(vmss.Tags)
 
 	// get number of labels on each node
-	numStartingLabels := map[string]int{}
-	for _, node := range nodeList.Items {
-		numStartingLabels[node.Name] = len(node.Labels)
-	}
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 
 	vmssNodes := s.GetNodesOnVMSS(&vmss, nodeList)
 	s.T().Logf("Found %d nodes on vmss %s", len(vmssNodes), *vmss.Name)
@@ -420,6 +411,7 @@ func (s *TestSuite) GetConfigOptions() *controller.ConfigOptions {
 
 func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions) {
 	configMap, err := controller.GetConfigMapFromConfigOptions(configOptions)
+	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
 	require.NoError(s.T(), err)
 }
@@ -438,6 +430,14 @@ func (s *TestSuite) GetNodes() *corev1.NodeList {
 	assert.NotEqual(0, len(nodeList.Items))
 
 	return nodeList
+}
+
+func (s *TestSuite) GetNumLabelsPerNode(nodeList *corev1.NodeList) map[string]int {
+	numLabels := map[string]int{}
+	for _, node := range nodeList.Items {
+		numLabels[node.Name] = len(node.Labels)
+	}
+	return numLabels
 }
 
 func (s *TestSuite) GetNodesOnVMSS(vmss *compute.VirtualMachineScaleSet, nodeList *corev1.NodeList) []corev1.Node {
@@ -500,6 +500,12 @@ func (s *TestSuite) CleanupNodes(vmssNodes []corev1.Node, labels map[string]stri
 		err := s.client.Update(context.Background(), &node)
 		require.NoError(s.T(), err)
 	}
+}
+
+func (s *TestSuite) ResetConfigOptions() {
+	// minSyncPeriod is 5m, is that what I want??
+	configMap := controller.DefaultConfigOptions()
+	s.UpdateConfigOptions(&configMap)
 }
 
 // I'm not sure how I'm going to test vms yet since I can't use the same cluster
