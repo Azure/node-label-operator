@@ -56,7 +56,7 @@ lint:
 # e2e-setup:
 
 e2e-test:
-	go test ./tests/e2e/... -timeout 0 -v
+	go test ./tests/e2e/... -timeout 0 -v -run Test/TestARMTagToNodeLabel
 .PHONY: e2e-run-tests
 
 e2e-cleanup-all: are-you-sure

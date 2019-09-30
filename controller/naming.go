@@ -20,7 +20,7 @@ const (
 )
 
 func ValidTagName(labelName string, configOptions ConfigOptions) bool {
-	return validTagName(labelWithoutPrefix(labelName, configOptions.LabelPrefix))
+	return validTagName(LabelWithoutPrefix(labelName, configOptions.LabelPrefix))
 }
 
 func ValidLabelName(tagName string) bool {
@@ -53,7 +53,7 @@ func ConvertTagNameToValidLabelName(tagName string, configOptions ConfigOptions)
 		result = result[:maxLabelNameLen]
 	}
 
-	return labelWithPrefix(result, configOptions.LabelPrefix)
+	return LabelWithPrefix(result, configOptions.LabelPrefix)
 }
 
 func ConvertLabelNameToValidTagName(labelName string, configOptions ConfigOptions) string {
@@ -85,11 +85,11 @@ func ConvertLabelValToValidTagVal(labelVal string) string {
 	return result
 }
 
-func labelWithPrefix(labelName, prefix string) string {
+func LabelWithPrefix(labelName, prefix string) string {
 	return fmt.Sprintf("%s/%s", prefix, labelName)
 }
 
-func labelWithoutPrefix(labelName, prefix string) string {
+func LabelWithoutPrefix(labelName, prefix string) string {
 	if strings.HasPrefix(labelName, fmt.Sprintf("%s/", prefix)) {
 		return strings.TrimPrefix(labelName, fmt.Sprintf("%s/", prefix))
 	}

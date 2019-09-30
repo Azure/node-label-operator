@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/node-label-operator/azure"
+	"github.com/Azure/node-label-operator/controller"
 )
 
 var Scheme = runtime.NewScheme()
@@ -27,7 +28,6 @@ func AddToScheme(scheme *runtime.Scheme) {
 	_ = corev1.AddToScheme(scheme)
 }
 
-// necessary?
 type Cluster struct {
 	KubeConfigPath string
 	SubscriptionID string
@@ -37,6 +37,7 @@ type Cluster struct {
 
 type TestSuite struct {
 	suite.Suite
+	suite.TearDownAllSuite
 	*Cluster
 	client client.Client
 }
@@ -78,4 +79,28 @@ func (s *TestSuite) SetupSuite() {
 	s.SubscriptionID = resource.SubscriptionID
 	s.ResourceGroup = resource.ResourceGroup
 	s.ResourceType = resource.ResourceType // ends up depending on which node is chosen first for aks-engine
+}
+
+// is this doing anything?
+func (s *TestSuite) TearDownSuite() {
+	s.T().Logf("\nTearDownSuite")
+
+	// make sure configmap is reset
+	var configMap corev1.ConfigMap
+	optionsNamespacedName := controller.OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
+	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
+	require.NoError(s.T(), err)
+	configOptions, err := controller.NewConfigOptions(configMap)
+	require.NoError(s.T(), err)
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.LabelPrefix = controller.DefaultLabelPrefix
+	configOptions.ConflictPolicy = controller.ARMPrecedence
+	configOptions.MinSyncPeriod = "1m"
+	configMap, err = controller.GetConfigMapFromConfigOptions(configOptions)
+	err = s.client.Update(context.Background(), &configMap)
+	require.NoError(s.T(), err)
+
+	// make sure necessary tags/labels deleted? I would maybe save current tags and current labels?
+
+	s.T().Logf("Finished tearing down suite")
 }

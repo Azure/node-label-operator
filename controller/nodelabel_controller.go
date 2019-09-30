@@ -250,7 +250,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 		for labelFullName, labelVal := range node.Labels {
 			if HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
 				// check if exists on vm/vmss
-				labelName := labelWithoutPrefix(labelFullName, configOptions.LabelPrefix)
+				labelName := LabelWithoutPrefix(labelFullName, configOptions.LabelPrefix)
 				_, ok := computeResource.Tags()[labelName]
 				if !ok { // if label doesn't exist on ARM resource, delete
 					log.V(1).Info("deleting label from node", "label name", labelFullName, "label value", labelVal)
