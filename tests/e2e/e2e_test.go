@@ -5,6 +5,7 @@ package tests
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -21,9 +22,13 @@ import (
 
 func Test(t *testing.T) {
 	c := &Cluster{}
+	// I should treat this as a string instead? check it's valid json instead
 	c.KubeConfigPath = os.Getenv("KUBECONFIG_OUT")
-	_, err := os.Stat(c.KubeConfigPath)
-	require.True(t, !os.IsNotExist(err))
+	var JSON map[string]interface{}
+	err := json.Unmarshal([]byte(c.KubeConfigPath), &JSON)
+	require.NoError(t, err)
+	// _, err := os.Stat(c.KubeConfigPath)
+	// require.True(t, !os.IsNotExist(err))
 	suite.Run(t, &TestSuite{Cluster: c})
 }
 
@@ -291,8 +296,6 @@ func (s *TestSuite) TestInvalidLabelsToTags() {
 
 // Helper functions
 
-// might not end up using this stuff but idk
-
 func (s *TestSuite) NewComputeResourceClient() controller.ComputeResource {
 	if s.ResourceType == controller.VMSS {
 		return s.NewVMSS()
@@ -456,11 +459,7 @@ func (s *TestSuite) ResetConfigOptions() {
 	s.UpdateConfigOptions(&configMap)
 }
 
-// I'm not sure how I'm going to test vms yet since I can't use the same cluster
-// I think resource IDs might be different so important
-
 // test:
 // invalid label names
 // too many tags or labels
 // resource group filter??
-// test vm

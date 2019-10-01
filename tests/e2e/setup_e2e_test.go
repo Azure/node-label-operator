@@ -59,12 +59,19 @@ func loadConfigOrFail(t *testing.T, kubeconfig string) *rest.Config {
 	return c
 }
 
+func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
+	c, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig_out))
+	require.NoError(t, err)
+	return c
+}
+
 func (s *TestSuite) SetupSuite() {
 	s.T().Logf("\nSetupSuite")
 	err := initialize(s.Cluster)
 	require.Nil(s.T(), err)
 	AddToScheme(Scheme)
-	cl, err := client.New(loadConfigOrFail(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
+	// cl, err := client.New(loadConfigOrFail(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
+	cl, err := client.New(loadConfigFromBytes(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
 	require.NoError(s.T(), err)
 	s.client = cl
 
