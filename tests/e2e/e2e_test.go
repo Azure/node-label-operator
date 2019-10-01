@@ -46,6 +46,8 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	s.UpdateConfigOptions(configOptions)
 	// do I need a sleep here?
 
+	time.Sleep(90 * time.Second)
+
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
 	numStartingTags := len(computeResource.Tags())
@@ -61,7 +63,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels)
 
 	// clean up compute resource by deleting tags
-	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
+	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 
 	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
 
@@ -95,6 +97,8 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.NodeToARM
 	s.UpdateConfigOptions(configOptions)
+
+	time.Sleep(90 * time.Second)
 
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
@@ -146,6 +150,8 @@ func (s *TestSuite) TestTwoWaySync() {
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.TwoWay
 	s.UpdateConfigOptions(configOptions)
+
+	time.Sleep(90 * time.Second)
 
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
@@ -220,6 +226,8 @@ func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
 	configOptions.SyncDirection = controller.ARMToNode
 	s.UpdateConfigOptions(configOptions)
 
+	time.Sleep(90 * time.Second)
+
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
 	numStartingTags := len(computeResource.Tags())
@@ -235,7 +243,7 @@ func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
 	s.CheckNodeLabelsForTags(computeResourceNodes, validTags, numStartingLabels)
 
 	// clean up compute resource by deleting tags
-	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
+	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 
 	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
 
@@ -274,6 +282,8 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	configOptions.SyncDirection = controller.NodeToARM
 	s.UpdateConfigOptions(configOptions)
 
+	time.Sleep(90 * time.Second)
+
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
 	numStartingTags := len(computeResource.Tags()) // I should probably do this before setting config map
@@ -305,6 +315,20 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	require.NoError(err)
 	assert.Equal(numStartingTags, len(computeResource.Tags()))
 
+}
+
+func (s *TestSuite) TestARMTagToNodeLabelResourceGroupFilter() {
+	// assert := assert.New(s.T())
+	// require := require.New(s.T())
+
+	// testing that nothing happens because resource group doesn't exist
+	// but I feel like maybe that should be validated and caught as an error?
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.NodeToARM
+	configOptions.ResourceGroupFilter = "non-existent-rg"
+	s.UpdateConfigOptions(configOptions)
+
+	// time.Sleep(90 * time.Second)
 }
 
 // Helper functions
@@ -369,6 +393,10 @@ func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions)
 	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
 	require.NoError(s.T(), err)
+
+	updatedConfigOptions := s.GetConfigOptions()
+	assert.Equal(s.T(), configOptions.SyncDirection, updatedConfigOptions.SyncDirection)
+	assert.Equal(s.T(), configOptions.ResourceGroupFilter, updatedConfigOptions.ResourceGroupFilter)
 }
 
 func (s *TestSuite) GetNodes() *corev1.NodeList {
