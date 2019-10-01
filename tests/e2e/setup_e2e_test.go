@@ -55,6 +55,22 @@ func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
 	return c
 }
 
+func (s *TestSuite) resetConfigOptions() {
+	var configMap corev1.ConfigMap
+	optionsNamespacedName := controller.OptionsConfigMapNamespacedName()
+	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
+	require.NoError(s.T(), err)
+	configOptions, err := controller.NewConfigOptions(configMap)
+	require.NoError(s.T(), err)
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.MinSyncPeriod = "1m"
+	configMap, err = controller.GetConfigMapFromConfigOptions(configOptions)
+	require.NoError(s.T(), err)
+	err = s.client.Update(context.Background(), &configMap)
+	require.NoError(s.T(), err)
+
+}
+
 func (s *TestSuite) SetupSuite() {
 	s.T().Logf("\nSetupSuite")
 	err := initialize(s.Cluster)
@@ -75,27 +91,17 @@ func (s *TestSuite) SetupSuite() {
 	s.SubscriptionID = resource.SubscriptionID
 	s.ResourceGroup = resource.ResourceGroup
 	s.ResourceType = resource.ResourceType // ends up depending on which node is chosen first for aks-engine
+
+	s.T().Logf("Resetting configmap")
+	s.resetConfigOptions()
 }
 
 // is this doing anything?
 func (s *TestSuite) TearDownSuite() {
 	s.T().Logf("\nTearDownSuite")
 
-	// make sure configmap is reset
-	var configMap corev1.ConfigMap
-	optionsNamespacedName := controller.OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
-	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
-	require.NoError(s.T(), err)
-	configOptions, err := controller.NewConfigOptions(configMap)
-	require.NoError(s.T(), err)
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = controller.DefaultLabelPrefix
-	configOptions.ConflictPolicy = controller.ARMPrecedence
-	configOptions.MinSyncPeriod = "1m"
-	configMap, err = controller.GetConfigMapFromConfigOptions(configOptions)
-	require.NoError(s.T(), err)
-	err = s.client.Update(context.Background(), &configMap)
-	require.NoError(s.T(), err)
+	s.T().Logf("Resetting configmap")
+	s.resetConfigOptions()
 
 	// make sure necessary tags/labels deleted? I would maybe save current tags and current labels?
 

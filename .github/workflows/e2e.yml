@@ -2,9 +2,6 @@ name: E2E
 on:
   schedule:
   - cron: '0/15 * * * *'
-  pull_request:
-    branches:
-      - master
 jobs:
 
   build:

@@ -43,9 +43,8 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.MinSyncPeriod = "1m"
 	s.UpdateConfigOptions(configOptions)
-	// do I need time to make sure this updates? like that it reaches the next reconcile in case minSyncPeriod was long
+	// do I need a sleep here?
 
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
@@ -60,8 +59,6 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 
 	// check that nodes now have accurate labels
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels)
-
-	// reset configmap first?
 
 	// clean up compute resource by deleting tags
 	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
@@ -95,10 +92,8 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 		"veg3": "jalapeno",
 	}
 
-	// update config map
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.NodeToARM
-	configOptions.MinSyncPeriod = "1m"
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -124,8 +119,8 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	}
 	s.T().Logf("Deleted test labels on nodes: %s", computeResource.Name())
 
-	// clean up compute resource by deleting tags
-	// if I implement deleting labels from vmss, then this will need to be a check instead of removing them
+	// clean up compute resource by deleting tags, because currently operator doesn't do that for label->tag sync
+	// is this the most recent version of computeResource?
 	for key := range labels {
 		delete(computeResource.Tags(), key)
 	}
@@ -148,10 +143,8 @@ func (s *TestSuite) TestTwoWaySync() {
 		"favfungi": "shiitake_mushroom",
 	}
 
-	// update config map
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.TwoWay
-	configOptions.MinSyncPeriod = "1m"
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -170,11 +163,7 @@ func (s *TestSuite) TestTwoWaySync() {
 
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels)
 
-	// reset configmap first so that tags and labels won't automatically come back
-	// configOptions = s.GetConfigOptions()
-	// configOptions.SyncDirection = controller.ARMToNode
-	// configOptions.MinSyncPeriod = "1m"
-	// s.UpdateConfigOptions(configOptions)
+	// reset configmap first so that tags and labels won't automatically come back?
 
 	// clean up vmss by deleting tags, which should also delete off of nodes
 	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
@@ -212,19 +201,110 @@ func (s *TestSuite) TestTwoWaySync() {
 	}
 }
 
-func (s *TestSuite) TestInvalidTagsToLabels() {
+func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
+	assert := assert.New(s.T())
+	require := require.New(s.T())
+
 	// tags
-	_ = map[string]*string{
+	tags := map[string]*string{
+		"veg4":      to.StringPtr("broccoli"),
+		"veg5":      to.StringPtr("brussels sprouts"),   // invalid label value
+		"orchstrtr": to.StringPtr("Kubernetes:1.13.10"), // invalid label value
+	}
+	// tags that are valid labels
+	validTags := map[string]*string{
 		"veg4": to.StringPtr("broccoli"),
-		"veg5": to.StringPtr("brussels sprouts"), // invalid label value
+	}
+
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.ARMToNode
+	s.UpdateConfigOptions(configOptions)
+
+	computeResource := s.NewAzComputeResourceClient()
+	nodeList := s.GetNodes()
+	numStartingTags := len(computeResource.Tags())
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
+
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
+
+	// wait for labels to update
+	time.Sleep(90 * time.Second)
+
+	// check that nodes now have accurate labels
+	s.CheckNodeLabelsForTags(computeResourceNodes, validTags, numStartingLabels)
+
+	// clean up compute resource by deleting tags
+	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
+
+	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
+
+	// check that corresponding labels were deleted
+	err := s.client.List(context.Background(), nodeList)
+	require.NoError(err)
+	for key := range validTags {
+		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
+		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
+			// check that tag was deleted
+			_, ok := node.Labels[validLabelName]
+			assert.False(ok)
+		}
+	}
+	for _, node := range nodeList.Items {
+		// Checking to see if original labels are there.
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 }
 
-func (s *TestSuite) TestInvalidLabelsToTags() {
+func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
+	assert := assert.New(s.T())
+	require := require.New(s.T())
+
 	// label
-	_ = map[string]string{
-		"k8s/role": "master", // invalid tag name
+	labels := map[string]string{
+		"last-update": "200_BCE",
+		"k8s/role":    "master", // invalid tag name
 	}
+	// labels that are valid tags
+	validLabels := map[string]string{
+		"last-update": "200_BCE",
+	}
+
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.NodeToARM
+	s.UpdateConfigOptions(configOptions)
+
+	computeResource := s.NewAzComputeResourceClient()
+	nodeList := s.GetNodes()
+	numStartingTags := len(computeResource.Tags()) // I should probably do this before setting config map
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
+
+	s.UpdateLabelsOnNodes(computeResourceNodes, labels)
+
+	// wait for tags to update
+	time.Sleep(90 * time.Second)
+
+	// check that compute resource has accurate labels
+	assert.Equal(len(labels), len(computeResource.Tags())-numStartingTags) // should check each node, current size - starting size
+	s.CheckAzComputeResourceTagsForLabels(computeResource, validLabels, numStartingTags)
+
+	// delete node labels first b/c if I delete tags first, they will just come back
+	// clean up nodes by deleting labels
+	s.CleanupNodes(computeResourceNodes, labels)
+	for _, node := range computeResourceNodes {
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
+	}
+	s.T().Logf("Deleted test labels on nodes: %s", computeResource.Name())
+
+	// clean up compute resource by deleting tags, because currently operator doesn't do that for label->tag sync
+	for key := range validLabels {
+		delete(computeResource.Tags(), key)
+	}
+	err := computeResource.Update(context.Background())
+	require.NoError(err)
+	assert.Equal(numStartingTags, len(computeResource.Tags()))
+
 }
 
 // Helper functions
@@ -341,6 +421,7 @@ func (s *TestSuite) UpdateTagsOnAzComputeResource(computeResource controller.Com
 	err := computeResource.Update(context.Background())
 	require.NoError(s.T(), err)
 	// check that computeResource tags have been updated
+	// this won't be true for invalid tags though
 	for key, val := range tags {
 		result, ok := computeResource.Tags()[key]
 		assert.True(s.T(), ok)
@@ -380,10 +461,10 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 
 func (s *TestSuite) CheckAzComputeResourceTagsForLabels(computeResource controller.ComputeResource, labels map[string]string, numStartingTags int) {
 	s.T().Logf("Checking Azure compute resource for accurate labels")
-	assert.Equal(s.T(), len(labels), len(computeResource.Tags())-numStartingTags) // should check each node, current size - starting size
+	assert.Equal(s.T(), len(labels), len(computeResource.Tags())-numStartingTags)
 	for key, val := range labels {
 		v, ok := computeResource.Tags()[key]
-		assert.True(s.T(), ok) // this is failing, or maybe it was the next line?
+		assert.True(s.T(), ok)
 		assert.Equal(s.T(), val, *v)
 	}
 }
@@ -412,12 +493,6 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 	}
 }
 
-func (s *TestSuite) ResetConfigOptions() {
-	// minSyncPeriod is 5m, is that what I want??
-	configMap := controller.DefaultConfigOptions()
-	s.UpdateConfigOptions(&configMap)
-}
-
-// test:
+// tests to write:
 // too many tags or labels
-// resource group filter??
+// resource group filter
