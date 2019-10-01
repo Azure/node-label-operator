@@ -26,10 +26,10 @@ jobs:
       
     - name: AKS-Engine E2E Tests
       env:
-        KUBECONFIG_OUT={{ secrets.AKSE_KUBECONFIG }}
+        KUBECONFIG_OUT: ${{ secrets.AKSE_KUBECONFIG }}
       run: make e2e-test
       
     - name: AKS E2E Tests
       env:
-        KUBECONFIG_OUT={{ secrets.AKS_KUBECONFIG }}
+        KUBECONFIG_OUT: ${{ secrets.AKS_KUBECONFIG }}
       run: make e2e-test
