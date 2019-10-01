@@ -15,13 +15,16 @@ const (
 // ComputeResource is a compute resource such as a Virtual Machine that
 // should have its labels propagated to nodes running on the compute resource
 type ComputeResource interface {
-	Update(ctx context.Context) error
+	Name() string
+	ID() string
 	Tags() map[string]*string
 	SetTag(name string, value *string)
+	Update(ctx context.Context) error
 }
 
 type VirtualMachine struct {
 	group  string
+	name   string
 	client *compute.VirtualMachinesClient
 	vm     *compute.VirtualMachine
 }
@@ -38,11 +41,15 @@ func NewVM(ctx context.Context, subscriptionID, resourceGroup, resourceName stri
 
 	vm = VMUserAssignedIdentity(vm)
 
-	return &VirtualMachine{group: resourceGroup, client: &client, vm: &vm}, nil
+	return &VirtualMachine{group: resourceGroup, name: resourceName, client: &client, vm: &vm}, nil
+}
+
+func NewVMInitialized(ctx context.Context, resourceGroup string, c *compute.VirtualMachinesClient, v *compute.VirtualMachine) *VirtualMachine {
+	return &VirtualMachine{group: resourceGroup, name: *v.Name, client: c, vm: v}
 }
 
 func (m VirtualMachine) Update(ctx context.Context) error {
-	f, err := m.client.CreateOrUpdate(ctx, m.group, *m.vm.Name, *m.vm)
+	f, err := m.client.CreateOrUpdate(ctx, m.group, m.name, *m.vm)
 	if err != nil {
 		return err
 	}
@@ -58,6 +65,14 @@ func (m VirtualMachine) Update(ctx context.Context) error {
 
 	m.vm = &vm
 	return nil
+}
+
+func (m VirtualMachine) Name() string {
+	return m.name
+}
+
+func (m VirtualMachine) ID() string {
+	return *m.vm.ID
 }
 
 func (m VirtualMachine) Tags() map[string]*string {
@@ -80,6 +95,7 @@ func VMUserAssignedIdentity(vm compute.VirtualMachine) compute.VirtualMachine {
 
 type VirtualMachineScaleSet struct {
 	group  string
+	name   string
 	client *compute.VirtualMachineScaleSetsClient
 	vmss   *compute.VirtualMachineScaleSet
 }
@@ -96,11 +112,15 @@ func NewVMSS(ctx context.Context, subscriptionID, resourceGroup, resourceName st
 
 	vmss = VMSSUserAssignedIdentity(vmss)
 
-	return &VirtualMachineScaleSet{group: resourceGroup, client: &client, vmss: &vmss}, nil
+	return &VirtualMachineScaleSet{group: resourceGroup, name: resourceName, client: &client, vmss: &vmss}, nil
+}
+
+func NewVMSSInitialized(ctx context.Context, resourceGroup string, c *compute.VirtualMachineScaleSetsClient, v *compute.VirtualMachineScaleSet) *VirtualMachineScaleSet {
+	return &VirtualMachineScaleSet{group: resourceGroup, name: *v.Name, client: c, vmss: v}
 }
 
 func (m VirtualMachineScaleSet) Update(ctx context.Context) error {
-	f, err := m.client.CreateOrUpdate(ctx, m.group, *m.vmss.Name, *m.vmss)
+	f, err := m.client.CreateOrUpdate(ctx, m.group, m.name, *m.vmss)
 	if err != nil {
 		return err
 	}
@@ -116,6 +136,14 @@ func (m VirtualMachineScaleSet) Update(ctx context.Context) error {
 
 	m.vmss = &vmss
 	return nil
+}
+
+func (m VirtualMachineScaleSet) Name() string {
+	return m.name
+}
+
+func (m VirtualMachineScaleSet) ID() string {
+	return *m.vmss.ID
 }
 
 func (m VirtualMachineScaleSet) Tags() map[string]*string {

@@ -35,8 +35,8 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			},
 			map[string]string{},
 			map[string]string{
-				labelWithPrefix("env", DefaultLabelPrefix): "test",
-				labelWithPrefix("v", DefaultLabelPrefix):   "1",
+				LabelWithPrefix("env", DefaultLabelPrefix): "test",
+				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
 			},
 		},
 		{
@@ -49,8 +49,8 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"favfruit": "banana",
 			}, // won't be contained in patch though it shouldn't go away
 			map[string]string{
-				labelWithPrefix("env", DefaultLabelPrefix): "test",
-				labelWithPrefix("v", DefaultLabelPrefix):   "1",
+				LabelWithPrefix("env", DefaultLabelPrefix): "test",
+				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
 			},
 		},
 		{
@@ -59,11 +59,11 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"env": to.StringPtr("test"),
 			},
 			map[string]string{
-				labelWithPrefix("env", DefaultLabelPrefix): "test",
-				labelWithPrefix("v", DefaultLabelPrefix):   "1",
+				LabelWithPrefix("env", DefaultLabelPrefix): "test",
+				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
 			},
 			map[string]string{
-				labelWithPrefix("env", DefaultLabelPrefix): "test",
+				LabelWithPrefix("env", DefaultLabelPrefix): "test",
 			},
 		},
 		{
@@ -73,11 +73,11 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"v":   to.StringPtr("2"),
 			},
 			map[string]string{
-				labelWithPrefix("env", DefaultLabelPrefix): "test",
-				labelWithPrefix("v", DefaultLabelPrefix):   "1",
+				LabelWithPrefix("env", DefaultLabelPrefix): "test",
+				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
 			},
 			map[string]string{
-				labelWithPrefix("v", DefaultLabelPrefix): "2",
+				LabelWithPrefix("v", DefaultLabelPrefix): "2",
 			},
 		},
 		{
@@ -86,10 +86,10 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"role": to.StringPtr("master"),
 			},
 			map[string]string{
-				labelWithPrefix("role", "k8s"): "master",
+				LabelWithPrefix("role", "k8s"): "master",
 			},
 			map[string]string{
-				labelWithPrefix("role", DefaultLabelPrefix): "master",
+				LabelWithPrefix("role", DefaultLabelPrefix): "master",
 			},
 		},
 		{
@@ -100,7 +100,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			},
 			map[string]string{},
 			map[string]string{
-				labelWithPrefix("agentPool", DefaultLabelPrefix): "agentpool1",
+				LabelWithPrefix("agentPool", DefaultLabelPrefix): "agentpool1",
 			},
 		},
 	}
@@ -262,12 +262,12 @@ func TestTimeToUpdate(t *testing.T) {
 		},
 		{
 			"node2",
-			map[string]string{"last-update": "2019-09-23T20.01.43Z", "min-sync-period": "1m"},
+			map[string]string{"node-label-operator/last-update": "2019-09-23T20.01.43Z", "node-label-operator/min-sync-period": "1m"},
 			true,
 		},
 		{
-			"node2",
-			map[string]string{"last-update": strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "."), "min-sync-period": "100h"},
+			"node3",
+			map[string]string{"node-label-operator/last-update": strings.ReplaceAll(time.Now().Format(time.RFC3339), ":", "."), "node-label-operator/min-sync-period": "100h"},
 			false,
 		},
 	}

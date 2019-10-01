@@ -10,7 +10,7 @@ import (
 
 func TestLoadConfigOptionsFromConfigMap(t *testing.T) {
 	configMap := NewFakeConfigMap()
-	configOptions, err := loadConfigOptionsFromConfigMap(*configMap)
+	configOptions, err := LoadConfigOptionsFromConfigMap(*configMap)
 	if err != nil {
 		t.Errorf("failed to load config options from config map: %q", err)
 	}
@@ -64,7 +64,7 @@ func TestGetConfigMapFromConfigOptions(t *testing.T) {
 
 	for _, tt := range configMapTests {
 		t.Run(tt.configName, func(t *testing.T) {
-			configMap, err := getConfigMapFromConfigOptions(&tt.given)
+			configMap, err := GetConfigMapFromConfigOptions(&tt.given)
 			if err != nil {
 				t.Errorf("failed to load config map from config options: %q", err)
 			}

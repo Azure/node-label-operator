@@ -47,7 +47,7 @@ type ConfigOptions struct {
 }
 
 func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
-	configOptions, err := loadConfigOptionsFromConfigMap(configMap)
+	configOptions, err := LoadConfigOptionsFromConfigMap(configMap)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,7 @@ func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
 
 func NewDefaultConfigOptions() (*corev1.ConfigMap, error) {
 	configOptions := DefaultConfigOptions()
-	configMap, err := getConfigMapFromConfigOptions(&configOptions)
+	configMap, err := GetConfigMapFromConfigOptions(&configOptions)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +113,7 @@ func DefaultConfigOptions() ConfigOptions {
 }
 
 // ConfigMap -> ConfigOptions
-func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, error) {
+func LoadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, error) {
 	data, err := json.Marshal(configMap.Data)
 	if err != nil {
 		return ConfigOptions{}, err
@@ -128,7 +128,7 @@ func loadConfigOptionsFromConfigMap(configMap corev1.ConfigMap) (ConfigOptions, 
 }
 
 // ConfigOptions -> ConfigMap
-func getConfigMapFromConfigOptions(configOptions *ConfigOptions) (corev1.ConfigMap, error) {
+func GetConfigMapFromConfigOptions(configOptions *ConfigOptions) (corev1.ConfigMap, error) {
 	b, err := json.Marshal(configOptions)
 	if err != nil {
 		return corev1.ConfigMap{}, err

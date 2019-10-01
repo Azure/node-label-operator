@@ -16,6 +16,14 @@ func (c FakeComputeResource) Update(ctx context.Context) error {
 	return nil
 }
 
+func (c FakeComputeResource) Name() string {
+	return ""
+}
+
+func (c FakeComputeResource) ID() string {
+	return ""
+}
+
 func (c FakeComputeResource) Tags() map[string]*string {
 	return c.tags
 }

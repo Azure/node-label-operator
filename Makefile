@@ -1,6 +1,7 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+E2E_SUBSCRIPTION ?= "Azure Container Service - Development"
 EXTRA_ARGS :=
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -52,6 +53,17 @@ lint:
 	golangci-lint run -j 2 $(EXTRA_ARGS)
 .PHONY: lint
 
+# e2e-setup:
+
+e2e-test:
+	go test ./tests/e2e/... -timeout 0 -v -run Test/TestARMTagToNodeLabel
+.PHONY: e2e-run-tests
+
+e2e-cleanup-all: are-you-sure
+	az group list --subscription $(E2E_SUBSCRIPTION) --tag owned-by=node-label-operator --query "[].name" --output tsv \
+		| xargs -I @@ sh -c 'echo "deleting @@ ..."; az group delete --subscription ${E2E_SUBSCRIPTION} --name @@ --yes --no-wait;'
+.PHONY: e2e-cleanup-all
+
 # Generate code
 generate: controller-gen
 	$(CONTROLLER_GEN) object:headerFile=./hack/boilerplate.go.txt
@@ -79,3 +91,7 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 .PHONY: controller-gen
+
+are-you-sure:
+	@echo "Are you sure? [Y/N] " && read ans && [ $${ans:-N} = Y ]
+PHONY: are-you-sure
