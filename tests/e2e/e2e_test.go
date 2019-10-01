@@ -5,7 +5,6 @@ package tests
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -16,16 +15,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 func Test(t *testing.T) {
 	c := &Cluster{}
-	// I should treat this as a string instead? check it's valid json instead
 	c.KubeConfig = os.Getenv("KUBECONFIG_OUT")
-	var JSON map[string]interface{}
-	err := json.Unmarshal([]byte(c.KubeConfig), &JSON) // does this work with YAML?
+	var config map[string]interface{}
+	err := yaml.Unmarshal([]byte(c.KubeConfig), &config)
 	require.NoError(t, err)
 	suite.Run(t, &TestSuite{Cluster: c})
 }
@@ -108,7 +107,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 		}
 	}
 	for _, node := range nodeList.Items {
-		// Checking to see if original labels are there. Can I assume this is true?
+		// Checking to see if original labels are there.
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 }
@@ -314,6 +313,7 @@ func (s *TestSuite) NewVMSS() controller.VirtualMachineScaleSet {
 	require.NoError(err)
 	assert.NotEqual(0, len(vmssList.Values()))
 	vmss := vmssList.Values()[0]
+	vmss = controller.VMSSUserAssignedIdentity(vmss)
 	s.T().Logf("Successfully found %d vmss: using %s", len(vmssList.Values()), *vmss.Name)
 	return *controller.NewVMSSInitialized(context.Background(), s.ResourceGroup, &vmssClient, &vmss)
 }
@@ -331,9 +331,10 @@ func (s *TestSuite) NewVM() controller.VirtualMachine {
 	}
 	require.NoError(err)
 	assert.NotEqual(0, len(vmList.Values()))
-	vmss := vmList.Values()[0]
-	s.T().Logf("Successfully found %d vms: using %s", len(vmList.Values()), *vmss.Name)
-	return *controller.NewVMInitialized(context.Background(), s.ResourceGroup, &vmClient, &vmss)
+	vm := vmList.Values()[0]
+	vm = controller.VMUserAssignedIdentity(vm)
+	s.T().Logf("Successfully found %d vms: using %s", len(vmList.Values()), *vm.Name)
+	return *controller.NewVMInitialized(context.Background(), s.ResourceGroup, &vmClient, &vm)
 }
 
 func (s *TestSuite) GetConfigOptions() *controller.ConfigOptions {

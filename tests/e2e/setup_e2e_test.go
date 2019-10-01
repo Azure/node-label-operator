@@ -42,12 +42,10 @@ type TestSuite struct {
 	client client.Client
 }
 
-// necessary?
 func initialize(c *Cluster) error {
 	if c.KubeConfig == "" {
 		return errors.New("missing parameters: KubeConfig must be set")
 	}
-	// do I want to create the test cluster(s) here somehow?
 	return nil
 }
 

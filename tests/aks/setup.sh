@@ -41,6 +41,8 @@ export RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
 export CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
 export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
 
+# there seems to need to be some time between creating the identity and running the role commands 
+
 az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID
 az role assignment create --role "Contributor" --assignee $PRINCIPAL_ID --scope /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${MC_RESOURCE_GROUP}
 
