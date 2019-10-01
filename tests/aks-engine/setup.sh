@@ -11,8 +11,8 @@ set -o pipefail
 
 export AKS_ENGINE_NAME=node-label-test-akse
 export AKS_ENGINE_RG=${AKS_ENGINE_NAME}-rg
-export AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
-export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
+export AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/${AKS_ENGINE_NAME}-creds.json
+export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/${AKS_ENGINE_NAME}-identity.json
 
 az group create --name $AKS_ENGINE_RG --location westus2 
 
