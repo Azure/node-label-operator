@@ -23,12 +23,10 @@ import (
 func Test(t *testing.T) {
 	c := &Cluster{}
 	// I should treat this as a string instead? check it's valid json instead
-	c.KubeConfigPath = os.Getenv("KUBECONFIG_OUT")
+	c.KubeConfig = os.Getenv("KUBECONFIG_OUT")
 	var JSON map[string]interface{}
-	err := json.Unmarshal([]byte(c.KubeConfigPath), &JSON)
+	err := json.Unmarshal([]byte(c.KubeConfig), &JSON) // does this work with YAML?
 	require.NoError(t, err)
-	// _, err := os.Stat(c.KubeConfigPath)
-	// require.True(t, !os.IsNotExist(err))
 	suite.Run(t, &TestSuite{Cluster: c})
 }
 

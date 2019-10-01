@@ -29,7 +29,7 @@ func AddToScheme(scheme *runtime.Scheme) {
 }
 
 type Cluster struct {
-	KubeConfigPath string
+	KubeConfig     string
 	SubscriptionID string
 	ResourceGroup  string
 	ResourceType   string
@@ -44,19 +44,11 @@ type TestSuite struct {
 
 // necessary?
 func initialize(c *Cluster) error {
-	if c.KubeConfigPath == "" {
-		return errors.New("missing parameters: KubeConfigPath must be set")
+	if c.KubeConfig == "" {
+		return errors.New("missing parameters: KubeConfig must be set")
 	}
 	// do I want to create the test cluster(s) here somehow?
 	return nil
-}
-
-func loadConfigOrFail(t *testing.T, kubeconfig string) *rest.Config {
-	c, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		&clientcmd.ConfigOverrides{}).ClientConfig()
-	require.NoError(t, err)
-	return c
 }
 
 func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
@@ -70,8 +62,7 @@ func (s *TestSuite) SetupSuite() {
 	err := initialize(s.Cluster)
 	require.Nil(s.T(), err)
 	AddToScheme(Scheme)
-	// cl, err := client.New(loadConfigOrFail(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
-	cl, err := client.New(loadConfigFromBytes(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
+	cl, err := client.New(loadConfigFromBytes(s.T(), s.KubeConfig), client.Options{Scheme: Scheme})
 	require.NoError(s.T(), err)
 	s.client = cl
 
