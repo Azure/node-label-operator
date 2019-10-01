@@ -1,6 +1,6 @@
 # Node Label Operator
 
-![](https://github.com/Azure/node-label-operator/workflows/CI/badge.svg)
+![](https://github.com/Azure/node-label-operator/workflows/CI/badge.svg) ![](https://github.com/Azure/node-label-operator/workflows/E2E/badge.svg)
 
 ## Overview
 
