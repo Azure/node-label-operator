@@ -55,7 +55,6 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 
 	// get nodes
 	nodeList := s.GetNodes()
-	s.T().Logf("Successfully found %d nodes", len(nodeList.Items))
 
 	// get number of tags
 	numStartingTags := len(computeResource.Tags())
@@ -63,14 +62,13 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	// get number of labels on each node
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 
-	computeResourceNodes := s.GetNodesOnComputeResource(computeResource, nodeList)
-	s.T().Logf("Found %d nodes on Azure compute resource %s", len(computeResourceNodes), computeResource.Name())
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	// check that every tag is a label (if it's convertible to a valid label name)
 
 	// update tags
 	// could this cause any issue with other updates that are maybe happening with tags that already existed?
-	computeResource = s.UpdateTagsOnComputeResource(computeResource, tags)
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	// check that computeResource tags have been updated
 	for key, val := range tags {
 		result, ok := computeResource.Tags()[key]
@@ -89,9 +87,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	// reset configmap first?
 
 	// clean up compute resource by deleting tags
-	computeResource = s.CleanupComputeResource(computeResource, tags)
-	assert.Equal(numStartingTags, len(computeResource.Tags())) // I didn't get tags again before doing this? actually I did
-	s.T().Logf("Deleted test tags on Azure compute resource %s", computeResource.Name())
+	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 
 	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
 
@@ -135,7 +131,6 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 
 	// get nodes
 	nodeList := s.GetNodes()
-	s.T().Logf("Successfully found %d nodes", len(nodeList.Items))
 
 	numStartingTags := len(computeResource.Tags()) // I should probably do this before setting config map
 
@@ -143,8 +138,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 
 	// get only nodes on the chosen compute resource
-	computeResourceNodes := s.GetNodesOnComputeResource(computeResource, nodeList)
-	s.T().Logf("Found %d nodes on Azure compute resource %s", len(computeResourceNodes), computeResource.Name())
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	// update node labels
 	for _, node := range computeResourceNodes {
@@ -162,7 +156,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	// check that compute resource has accurate labels
 	s.T().Logf("Checking Azure compute resource for accurate labels")
 	// assert.Equal(len(labels), len(vmss.Tags)) // should check each node, current size - starting size
-	s.CheckComputeResourceTagsForLabels(computeResource, labels)
+	s.CheckAzComputeResourceTagsForLabels(computeResource, labels)
 
 	// reset configmap first?
 
@@ -212,18 +206,16 @@ func (s *TestSuite) TestTwoWaySync() {
 
 	// get nodes
 	nodeList := s.GetNodes()
-	s.T().Logf("Successfully found %d nodes", len(nodeList.Items))
 
 	numStartingTags := len(computeResource.Tags())
 
 	// get number of labels on each node
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 
-	computeResourceNodes := s.GetNodesOnComputeResource(computeResource, nodeList)
-	s.T().Logf("Found %d nodes on Azure compute resource %s", len(computeResourceNodes), computeResource.Name())
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	// update tags
-	computeResource = s.UpdateTagsOnComputeResource(computeResource, tags)
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	// check that vmss tags have been updated
 	for key, val := range tags {
 		result, ok := computeResource.Tags()[key]
@@ -242,7 +234,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	}
 
 	// check tags
-	s.CheckComputeResourceTagsForLabels(computeResource, labels)
+	s.CheckAzComputeResourceTagsForLabels(computeResource, labels)
 
 	// check labels
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels)
@@ -250,9 +242,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	// cleanup configmap first
 
 	// clean up vmss by deleting tags
-	computeResource = s.CleanupComputeResource(computeResource, tags)
-	assert.Equal(numStartingTags, len(computeResource.Tags())) // might not be true yet...
-	s.T().Logf("Deleted test tags on Azure compute resource %s", computeResource.Name())
+	computeResource = s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 
 	// clean up nodes by deleting labels
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -367,6 +357,7 @@ func (s *TestSuite) GetNodes() *corev1.NodeList {
 	require.NoError(err)
 	// should I somehow pass the expected number of nodes and check it here?
 	assert.NotEqual(0, len(nodeList.Items))
+	s.T().Logf("Successfully found %d nodes", len(nodeList.Items))
 
 	return nodeList
 }
@@ -379,8 +370,8 @@ func (s *TestSuite) GetNumLabelsPerNode(nodeList *corev1.NodeList) map[string]in
 	return numLabels
 }
 
-func (s *TestSuite) GetNodesOnComputeResource(computeResource controller.ComputeResource, nodeList *corev1.NodeList) []corev1.Node {
-	vmssNodes := []corev1.Node{}
+func (s *TestSuite) GetNodesOnAzComputeResource(computeResource controller.ComputeResource, nodeList *corev1.NodeList) []corev1.Node {
+	computeResourceNodes := []corev1.Node{}
 	for _, node := range nodeList.Items {
 		// comparing values? Do I know vmss.ID is same format?
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
@@ -388,15 +379,16 @@ func (s *TestSuite) GetNodesOnComputeResource(computeResource controller.Compute
 		resource, err := azure.ParseProviderID(computeResource.ID())
 		require.NoError(s.T(), err)
 		if provider.ResourceType == resource.ResourceType && provider.ResourceName == resource.ResourceName {
-			vmssNodes = append(vmssNodes, node)
+			computeResourceNodes = append(computeResourceNodes, node)
 		}
 	}
-	assert.NotEqual(s.T(), 0, len(vmssNodes))
+	assert.NotEqual(s.T(), 0, len(computeResourceNodes))
+	s.T().Logf("Found %d nodes on Azure compute resource %s", len(computeResourceNodes), computeResource.Name())
 
-	return vmssNodes
+	return computeResourceNodes
 }
 
-func (s *TestSuite) UpdateTagsOnComputeResource(computeResource controller.ComputeResource, tags map[string]*string) controller.ComputeResource {
+func (s *TestSuite) UpdateTagsOnAzComputeResource(computeResource controller.ComputeResource, tags map[string]*string) controller.ComputeResource {
 	for tag, val := range tags {
 		computeResource.Tags()[tag] = val
 	}
@@ -421,7 +413,7 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 	}
 }
 
-func (s *TestSuite) CheckComputeResourceTagsForLabels(computeResource controller.ComputeResource, labels map[string]string) {
+func (s *TestSuite) CheckAzComputeResourceTagsForLabels(computeResource controller.ComputeResource, labels map[string]string) {
 	for key, val := range labels {
 		v, ok := computeResource.Tags()[key]
 		assert.True(s.T(), ok) // this is failing, or maybe it was the next line?
@@ -429,13 +421,14 @@ func (s *TestSuite) CheckComputeResourceTagsForLabels(computeResource controller
 	}
 }
 
-func (s *TestSuite) CleanupComputeResource(computeResource controller.ComputeResource,
-	tags map[string]*string) controller.ComputeResource {
+func (s *TestSuite) CleanupAzComputeResource(computeResource controller.ComputeResource, tags map[string]*string, numStartingTags int) controller.ComputeResource {
 	for key := range tags {
 		delete(computeResource.Tags(), key)
 	}
 	err := computeResource.Update(context.Background())
 	require.NoError(s.T(), err)
+	assert.Equal(s.T(), numStartingTags, len(computeResource.Tags())) // is this always true? two-way sync?
+	s.T().Logf("Deleted test tags on Azure compute resource %s", computeResource.Name())
 
 	return computeResource
 }
@@ -459,6 +452,5 @@ func (s *TestSuite) ResetConfigOptions() {
 }
 
 // test:
-// invalid label names
 // too many tags or labels
 // resource group filter??
