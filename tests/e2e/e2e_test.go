@@ -112,7 +112,6 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	time.Sleep(90 * time.Second)
 
 	// check that compute resource has accurate labels
-	assert.Equal(len(labels), len(computeResource.Tags())-numStartingTags) // should check each node, current size - starting size
 	s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
 
 	// delete node labels first b/c if I delete tags first, they will just come back
@@ -296,7 +295,6 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	time.Sleep(90 * time.Second)
 
 	// check that compute resource has accurate labels
-	assert.Equal(len(labels), len(computeResource.Tags())-numStartingTags) // should check each node, current size - starting size
 	s.CheckAzComputeResourceTagsForLabels(computeResource, validLabels, numStartingTags)
 
 	// delete node labels first b/c if I delete tags first, they will just come back
@@ -317,7 +315,10 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 
 }
 
-func (s *TestSuite) TestARMTagToNodeLabelResourceGroupFilter() {
+// will be named TestARMTagToNodeLabelResourceGroupFilter
+// how do I get multiple resource groups? aks cluster with multiple node pools and
+// therefore multiple MC_ RGs?
+func (s *TestSuite) TestResourceGroupFilter() {
 	// assert := assert.New(s.T())
 	// require := require.New(s.T())
 
@@ -325,10 +326,14 @@ func (s *TestSuite) TestARMTagToNodeLabelResourceGroupFilter() {
 	// but I feel like maybe that should be validated and caught as an error?
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.NodeToARM
-	configOptions.ResourceGroupFilter = "non-existent-rg"
+	configOptions.ResourceGroupFilter = s.ResourceGroup
 	s.UpdateConfigOptions(configOptions)
 
 	// time.Sleep(90 * time.Second)
+
+	// I will need to try tagging all VMs, or at least one in each nodepool,
+	// and checking that only the one in the chosen resource group was updated
+	// but how should I get the other resource groups?
 }
 
 // Helper functions
@@ -395,8 +400,10 @@ func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions)
 	require.NoError(s.T(), err)
 
 	updatedConfigOptions := s.GetConfigOptions()
-	assert.Equal(s.T(), configOptions.SyncDirection, updatedConfigOptions.SyncDirection)
-	assert.Equal(s.T(), configOptions.ResourceGroupFilter, updatedConfigOptions.ResourceGroupFilter)
+	require.Equal(s.T(), configOptions.SyncDirection, updatedConfigOptions.SyncDirection)
+	require.Equal(s.T(), configOptions.ResourceGroupFilter, updatedConfigOptions.ResourceGroupFilter)
+	s.T().Logf("Config options - syncDirection: %s, labelPrefix: %s, minSyncPeriod: %s",
+		configOptions.SyncDirection, configOptions.LabelPrefix, configOptions.MinSyncPeriod)
 }
 
 func (s *TestSuite) GetNodes() *corev1.NodeList {

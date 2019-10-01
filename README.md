@@ -18,8 +18,11 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
 1. Create a cluster.
 2. Authentication:
     1. If using Azure MSI (Managed Service Identity) through aad-pod-identity, create AzureIdentity and AzureIdentityBinding resources for your cluster,
-    using the service principal or user-assigned identities already in your cluster. If using genesys, the user-assigned identity is created automatically.
-    You may need to create a Managed Identity Operator RBAC role. `kubectl apply -f samples/aadpodidentity.yaml` and `kubectl apply -f samples/aadpodidentitybinding.yaml`.
+    using the service principal or user-assigned identities already in your cluster.
+    You may need to create a Managed Identity Operator RBAC role. You will need to define AzureIdentity and AzureIdentityBinding in configuration files
+    and run something like `kubectl apply -f samples/aadpodidentity.yaml` and `kubectl apply -f samples/aadpodidentitybinding.yaml` where
+    `samples/aadpodidentity.yaml` and `samples/aadpodidentitybinding.yaml` are configuration files filled with your MSI information.
+    You will need to have only one user-assigned identity on the compute resource (VM or VMSS) that the operator is running on.
     2. If using Azure AD Application ID and Secret credentials, set the following environment variables...
         ```
         export AZURE_SUBSCRIPTION_ID=
@@ -27,12 +30,14 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
         export AZURE_CLIENT_ID=
         export AZURE_CLIENT_SECRET=
         ```
-2. Set up the Kubernetes ConfigMap. It must be named 'node-label-controller' and have namespace 'node-label-controller-system' to allow to controller to
-watch it in addition to nodes. `kubectl apply -f samples/configmap.yaml`. If you don't, default settings will be used.
-    1. `syncDirection`: Direction of synchronization. Default is `arm-to-node`. Other options are `two-way` and `node-to-arm`. 
+2. Set up the Kubernetes ConfigMap. It must be named 'node-label-operator' and have namespace 'node-label-operator-system' to allow to controller to
+watch it in addition to nodes. `kubectl apply -f samples/configmap.yaml`. If you don't, default settings will be used. You won't be able to create the configmap
+until the namespace has been created.
+    1. `syncDirection`: Direction of synchronization. Default is `arm-to-node`. Other options are `two-way` and `node-to-arm`. Currently only `arm-to-node` is fully
+    implemented and tested.
     2. `labelPrefix`: The node label prefix, with a default of `azure.tags`. An empty prefix will be permitted. However if you use an empty prefix, node labels
     will not be deleted when the corresponding ARM tag is deleted so using a non-empty prefix is strongly recommended.
-    3. `tagPrefix`: Not supported currently. 
+    3. `tagPrefix`: Not supported currently.
     4. `conflictPolicy`: The policy for conflicting tag/label values. ARM tags or node labels can be given priority. ARM tags have priority by default
     (`arm-precedence`). Another option is to not update tags and raise Kubernetes event (`ignore`) and `node-precedence`.
     5. `resourceGroupFilter`: The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1, RG2, RG3).
