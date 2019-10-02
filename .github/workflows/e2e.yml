@@ -44,6 +44,7 @@ jobs:
         AZURE_SUBSCRIPTION_ID: ${{ secrets.E2E_SUBSCRIPTION_ID }}
         AZURE_TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
       run: make e2e-test
 
     - name: AKS E2E Tests
@@ -52,5 +53,6 @@ jobs:
         AZURE_SUBSCRIPTION_ID: ${{ secrets.E2E_SUBSCRIPTION_ID }}
         AZURE_TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
+        AZURE_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
       run: make e2e-test
 
