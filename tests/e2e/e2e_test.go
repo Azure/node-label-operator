@@ -44,7 +44,6 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
 	s.UpdateConfigOptions(configOptions)
-	// do I need a sleep here?
 
 	time.Sleep(90 * time.Second)
 
@@ -59,10 +58,8 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	// wait for labels to update
 	time.Sleep(90 * time.Second)
 
-	// check that nodes now have accurate labels
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels)
 
-	// clean up compute resource by deleting tags
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 
 	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
@@ -130,6 +127,9 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	err := computeResource.Update(context.Background())
 	require.NoError(err)
 	assert.Equal(numStartingTags, len(computeResource.Tags()))
+
+	// do I need to make sure that configOptions.SyncDirection is reset? is this what's causing issues somehow?
+	// are there tags syncing that I'm not expecting?
 }
 
 func (s *TestSuite) TestTwoWaySync() {
@@ -210,7 +210,6 @@ func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
-	// tags
 	tags := map[string]*string{
 		"veg4":      to.StringPtr("broccoli"),
 		"veg5":      to.StringPtr("brussels sprouts"),   // invalid label value
@@ -238,10 +237,8 @@ func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
 	// wait for labels to update
 	time.Sleep(90 * time.Second)
 
-	// check that nodes now have accurate labels
 	s.CheckNodeLabelsForTags(computeResourceNodes, validTags, numStartingLabels)
 
-	// clean up compute resource by deleting tags
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 
 	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
@@ -267,7 +264,6 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
-	// label
 	labels := map[string]string{
 		"last-update": "200_BCE",
 		"k8s/role":    "master", // invalid tag name
@@ -315,6 +311,193 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 
 }
 
+func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
+	assert := assert.New(s.T())
+	require := require.New(s.T())
+
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.ConflictPolicy = controller.ARMPrecedence
+	s.UpdateConfigOptions(configOptions)
+
+	time.Sleep(90 * time.Second)
+
+	startingTags := map[string]*string{
+		"a":          to.StringPtr("b"),
+		"best-coast": to.StringPtr("west"),
+	}
+
+	tags := map[string]*string{
+		"best-coast": to.StringPtr("east"),
+	}
+
+	computeResource := s.NewAzComputeResourceClient()
+	nodeList := s.GetNodes()
+	numStartingTags := len(computeResource.Tags())
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
+
+	// update Azure compute resource first with original values
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, startingTags)
+	time.Sleep(90 * time.Second) // wait to update node labels
+	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels)
+
+	// numUntouchedLabels := s.GetNumLabelsPerNode(nodeList) // nodelist hasn't been updated yet :)
+	numUntouchedLabels := map[string]int{}
+	for _, node := range computeResourceNodes {
+		numUntouchedLabels[node.Name] = numStartingLabels[node.Name] + 1 // include whatever other tags were added
+	}
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
+	// wait for labels to update to new values, with arm tag value overriding
+	time.Sleep(90 * time.Second)
+	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numUntouchedLabels)
+
+	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
+	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
+	// check that corresponding labels were deleted
+	err := s.client.List(context.Background(), nodeList)
+	require.NoError(err)
+	for key := range startingTags {
+		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
+		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
+			_, ok := node.Labels[validLabelName]
+			assert.False(ok) // check that tag was deleted
+		}
+	}
+	for _, node := range nodeList.Items {
+		// Checking to see if original labels are there.
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
+	}
+}
+
+func (s *TestSuite) TestConflictPolicyNodePrecedence() {
+	assert := assert.New(s.T())
+	require := require.New(s.T())
+
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.ConflictPolicy = controller.NodePrecedence
+	s.UpdateConfigOptions(configOptions)
+
+	time.Sleep(90 * time.Second)
+
+	startingTags := map[string]*string{
+		"a":          to.StringPtr("b"),
+		"best-coast": to.StringPtr("west"),
+	}
+
+	tags := map[string]*string{
+		"best-coast": to.StringPtr("east"),
+	}
+
+	expectedTags := map[string]string{
+		controller.LabelWithPrefix("a", configOptions.LabelPrefix):          "b",
+		controller.LabelWithPrefix("best-coast", configOptions.LabelPrefix): "west",
+	}
+
+	computeResource := s.NewAzComputeResourceClient()
+	nodeList := s.GetNodes()
+	numStartingTags := len(computeResource.Tags())
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
+
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, startingTags)
+	time.Sleep(90 * time.Second) // wait for labels to update
+	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels)
+
+	// numUntouchedLabels := map[string]int{}
+	// for _, node := range computeResourceNodes {
+	// 	numUntouchedLabels[node.Name] = numStartingLabels[node.Name] + 1
+	// }
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
+	time.Sleep(90 * time.Second) // wait for labels to update
+	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels)
+	s.CheckAzComputeResourceTagsForLabels(computeResource, expectedTags, numStartingTags+1) // should still be 'west'
+
+	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
+	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
+	// check that corresponding labels were deleted
+	err := s.client.List(context.Background(), nodeList)
+	require.NoError(err)
+	for key := range startingTags {
+		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
+		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
+			_, ok := node.Labels[validLabelName]
+			assert.False(ok) // check that tag was deleted
+		}
+	}
+	for _, node := range nodeList.Items {
+		// Checking to see if original labels are there.
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
+	}
+}
+
+func (s *TestSuite) TestConflictPolicyIgnore() {
+	assert := assert.New(s.T())
+	require := require.New(s.T())
+
+	configOptions := s.GetConfigOptions()
+	configOptions.ConflictPolicy = controller.Ignore
+	s.UpdateConfigOptions(configOptions)
+	time.Sleep(90 * time.Second)
+
+	startingTags := map[string]*string{
+		"a":          to.StringPtr("b"),
+		"best-coast": to.StringPtr("west"),
+	}
+
+	tags := map[string]*string{
+		"best-coast": to.StringPtr("east"),
+	}
+
+	// tags expected to become labels
+	expectedTags := map[string]*string{
+		"a":          to.StringPtr("b"),
+		"best-coast": to.StringPtr("west"),
+	}
+
+	// labels expected to become tags
+	expectedLabels := map[string]string{
+		controller.LabelWithPrefix("a", configOptions.LabelPrefix):          "b",
+		controller.LabelWithPrefix("best-coast", configOptions.LabelPrefix): "east",
+	}
+
+	computeResource := s.NewAzComputeResourceClient()
+	nodeList := s.GetNodes()
+	numStartingTags := len(computeResource.Tags())
+	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
+	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
+
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, startingTags)
+	time.Sleep(90 * time.Second)
+	s.CheckNodeLabelsForTags(computeResourceNodes, expectedTags, numStartingLabels)
+
+	numCurrentLabels := s.GetNumLabelsPerNode(nodeList)
+	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
+	time.Sleep(90 * time.Second)
+	s.CheckNodeLabelsForTags(computeResourceNodes, expectedTags, numCurrentLabels)
+	s.CheckAzComputeResourceTagsForLabels(computeResource, expectedLabels, numStartingTags+1)
+
+	// clean up compute resource by deleting tags
+	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
+	time.Sleep(90 * time.Second) // wait for labels to be removed, assuming minSyncPeriod=1m
+	// check that corresponding labels were deleted
+	err := s.client.List(context.Background(), nodeList)
+	require.NoError(err)
+	for key := range tags {
+		validLabelName := controller.ConvertTagNameToValidLabelName(key, controller.DefaultConfigOptions())
+		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
+			// check that tag was deleted
+			_, ok := node.Labels[validLabelName]
+			assert.False(ok)
+		}
+	}
+	for _, node := range nodeList.Items {
+		// Checking to see if original labels are there.
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
+	}
+}
+
 // will be named TestARMTagToNodeLabelResourceGroupFilter
 // how do I get multiple resource groups? aks cluster with multiple node pools and
 // therefore multiple MC_ RGs?
@@ -326,7 +509,7 @@ func (s *TestSuite) TestResourceGroupFilter() {
 	// but I feel like maybe that should be validated and caught as an error?
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.NodeToARM
-	configOptions.ResourceGroupFilter = s.ResourceGroup
+	configOptions.ResourceGroupFilter = s.ResourceGroup // reset at end?
 	s.UpdateConfigOptions(configOptions)
 
 	// time.Sleep(90 * time.Second)
@@ -434,7 +617,6 @@ func (s *TestSuite) GetNumLabelsPerNode(nodeList *corev1.NodeList) map[string]in
 func (s *TestSuite) GetNodesOnAzComputeResource(computeResource controller.ComputeResource, nodeList *corev1.NodeList) []corev1.Node {
 	computeResourceNodes := []corev1.Node{}
 	for _, node := range nodeList.Items {
-		// comparing values? Do I know vmss.ID is same format?
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
 		require.NoError(s.T(), err)
 		resource, err := azure.ParseProviderID(computeResource.ID())
@@ -456,7 +638,6 @@ func (s *TestSuite) UpdateTagsOnAzComputeResource(computeResource controller.Com
 	err := computeResource.Update(context.Background())
 	require.NoError(s.T(), err)
 	// check that computeResource tags have been updated
-	// this won't be true for invalid tags though
 	for key, val := range tags {
 		result, ok := computeResource.Tags()[key]
 		assert.True(s.T(), ok)
@@ -467,7 +648,7 @@ func (s *TestSuite) UpdateTagsOnAzComputeResource(computeResource controller.Com
 	return computeResource
 }
 
-func (s *TestSuite) UpdateLabelsOnNodes(nodes []corev1.Node, labels map[string]string) {
+func (s *TestSuite) UpdateLabelsOnNodes(nodes []corev1.Node, labels map[string]string) []corev1.Node {
 	for _, node := range nodes {
 		for key, val := range labels {
 			node.Labels[key] = val
@@ -475,7 +656,22 @@ func (s *TestSuite) UpdateLabelsOnNodes(nodes []corev1.Node, labels map[string]s
 		err := s.client.Update(context.Background(), &node)
 		require.NoError(s.T(), err)
 	}
+	// check that labels have been updated
+	updatedNodes := []corev1.Node{}
+	for _, node := range nodes {
+		updatedNode := &corev1.Node{}
+		err := s.client.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode)
+		require.NoError(s.T(), err)
+		for key, val := range labels {
+			v, ok := node.Labels[key]
+			assert.True(s.T(), ok)
+			assert.Equal(s.T(), val, v)
+		}
+		updatedNodes = append(updatedNodes, *updatedNode)
+	}
 	s.T().Logf("Updated node labels")
+
+	return updatedNodes
 }
 
 func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]*string, numStartingLabels map[string]int) {

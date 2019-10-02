@@ -80,11 +80,12 @@ func (s *TestSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 	s.client = cl
 
-	// better to get metadata endpoint?
+	// better to get metadata endpoint? would that be an issue w/ aad-pod-identity running?
 	nodeList := &corev1.NodeList{}
 	err = cl.List(context.Background(), nodeList, client.InNamespace("default"))
 	require.NoError(s.T(), err)
 	require.NotEmpty(s.T(), nodeList.Items)
+	// for testing resource group filter, need to instead find every resource group
 	resource, err := azure.ParseProviderID(nodeList.Items[0].Spec.ProviderID)
 	require.NoError(s.T(), err)
 
