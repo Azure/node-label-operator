@@ -44,7 +44,6 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
 	s.UpdateConfigOptions(configOptions)
-
 	time.Sleep(90 * time.Second)
 
 	computeResource := s.NewAzComputeResourceClient()
