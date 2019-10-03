@@ -233,7 +233,7 @@ func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
 		}
 	}
 	for _, node := range nodeList.Items {
-		// Checking to see if original labels are there
+		// checking to see if original labels are there
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 }
@@ -533,11 +533,6 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 
-	// I will need to try tagging all VMs, or at least one in each nodepool,
-	// and checking that only the one in the chosen resource group was updated
-	// but how should I get the other resource groups?
-
-	// reset
 	configOptions = s.GetConfigOptions()
 	configOptions.ResourceGroupFilter = controller.DefaultResourceGroupFilter
 	s.UpdateConfigOptions(configOptions)
@@ -545,7 +540,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 
 // will be named TestARMTagToNodeLabel_CustomLabelPrefix
 // if label prefix is changed, there will still be all of the old labels. should this be dealt with in the operator?
-func (s *TestSuite) TestCustomLabelPrefix() {
+func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
@@ -561,20 +556,20 @@ func (s *TestSuite) TestCustomLabelPrefix() {
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
+	customPrefix := "cloudprovider.tags"
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = "cloudprovider.tags"
+	configOptions.LabelPrefix = customPrefix
 	s.UpdateConfigOptions(configOptions)
 	WaitForReconcile() // wait because more labels are going to be added
 
 	// delete labels with "azure.tags" prefix
-	s.DeleteLabelsWithPrefix(nodeList.Items, controller.DefaultLabelPrefix)
+	nodeList = s.GetNodes()
+	s.DeleteLabelsWithPrefix(nodeList, controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	WaitForReconcile() // wait for labels to update
 
-	// I think these nodes aren't updated is the problem
-	// except they are
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
@@ -591,14 +586,15 @@ func (s *TestSuite) TestCustomLabelPrefix() {
 
 		}
 	}
-	// also delete any other labels with the prefix
-	s.DeleteLabelsWithPrefix(nodeList.Items, configOptions.LabelPrefix)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
 	configOptions.LabelPrefix = controller.DefaultLabelPrefix
 	s.UpdateConfigOptions(configOptions)
-	WaitForReconcile()                    // wait for tags with 'azure.tags' prefix to come back
+	WaitForReconcile() // wait for tags with 'azure.tags' prefix to come back
+
+	s.DeleteLabelsWithPrefix(nodeList, customPrefix)
+	nodeList = s.GetNodes()
 	for _, node := range nodeList.Items { // checking to see if original labels are there
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
@@ -630,7 +626,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	WaitForReconcile()
 
 	// delete labels with "azure.tags" prefix
-	s.DeleteLabelsWithPrefix(nodeList.Items, controller.DefaultLabelPrefix)
+	s.DeleteLabelsWithPrefix(nodeList, controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	WaitForReconcile() // wait for labels to update
@@ -645,10 +641,23 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 
 	// delete corresponding tag labels
 	for _, node := range computeResourceNodes {
-		for key := range tags {
-			delete(node.Labels, key)
+		newLabels := map[string]*string{}
+		// for key := range tags {
+		for key, val := range node.Labels {
+			if _, ok := tags[key]; ok {
+				delete(node.Labels, key)
+				newLabels[key] = nil
+			} else {
+				newLabels[key] = &val
+			}
 		}
+		patch, err := controller.LabelPatchWithDelete(newLabels)
+		require.NoError(err)
+		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
+		require.NoError(err)
 	}
+	// need to update
+
 	// check that corresponding labels were deleted
 	err := s.client.List(context.Background(), nodeList)
 	require.NoError(err)
@@ -660,6 +669,12 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 			assert.False(ok)
 		}
 	}
+
+	configOptions = s.GetConfigOptions()
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.LabelPrefix = controller.DefaultLabelPrefix
+	s.UpdateConfigOptions(configOptions)
+
 	// delete labels from pre-existing tags
 	for _, node := range nodeList.Items {
 		newLabels := map[string]*string{}
@@ -671,19 +686,16 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 				newLabels[key] = val
 			}
 		}
-		// err := s.client.Update(context.Background(), &node)
 		patch, err := controller.LabelPatchWithDelete(newLabels)
 		require.NoError(err)
 		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
 		require.NoError(err)
 		// checking to see if original labels are there
+		err = s.client.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, &node)
+		require.NoError(err)
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 
-	configOptions = s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = controller.DefaultLabelPrefix
-	s.UpdateConfigOptions(configOptions)
 }
 
 // will be named TestNodeLabelToARMTag_TooManyTags
@@ -904,8 +916,10 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 	}
 }
 
-func (s *TestSuite) DeleteLabelsWithPrefix(nodes []corev1.Node, labelPrefix string) {
-	for _, node := range nodes {
+func (s *TestSuite) DeleteLabelsWithPrefix(nodeList *corev1.NodeList, labelPrefix string) {
+	err := s.client.List(context.Background(), nodeList)
+	require.NoError(s.T(), err)
+	for _, node := range nodeList.Items {
 		newLabels := map[string]*string{}
 		for key, val := range node.Labels {
 			if controller.HasLabelPrefix(key, labelPrefix) {
