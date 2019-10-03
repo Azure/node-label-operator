@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -55,7 +56,7 @@ func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
 	return c
 }
 
-func (s *TestSuite) resetConfigOptions() {
+func (s *TestSuite) setConfigOptions(minSyncPeriod string) {
 	var configMap corev1.ConfigMap
 	optionsNamespacedName := controller.OptionsConfigMapNamespacedName()
 	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
@@ -63,12 +64,12 @@ func (s *TestSuite) resetConfigOptions() {
 	configOptions, err := controller.NewConfigOptions(configMap)
 	require.NoError(s.T(), err)
 	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.MinSyncPeriod = "1m"
+	configOptions.ConflictPolicy = controller.ARMPrecedence
+	configOptions.MinSyncPeriod = minSyncPeriod
 	configMap, err = controller.GetConfigMapFromConfigOptions(configOptions)
 	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
 	require.NoError(s.T(), err)
-
 }
 
 func (s *TestSuite) SetupSuite() {
@@ -80,11 +81,12 @@ func (s *TestSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 	s.client = cl
 
-	// better to get metadata endpoint?
+	// better to get metadata endpoint? would that be an issue w/ aad-pod-identity running?
 	nodeList := &corev1.NodeList{}
 	err = cl.List(context.Background(), nodeList, client.InNamespace("default"))
 	require.NoError(s.T(), err)
 	require.NotEmpty(s.T(), nodeList.Items)
+	// for testing resource group filter, need to instead find every resource group
 	resource, err := azure.ParseProviderID(nodeList.Items[0].Spec.ProviderID)
 	require.NoError(s.T(), err)
 
@@ -93,7 +95,8 @@ func (s *TestSuite) SetupSuite() {
 	s.ResourceType = resource.ResourceType // ends up depending on which node is chosen first for aks-engine
 
 	s.T().Logf("Resetting configmap")
-	s.resetConfigOptions()
+	s.setConfigOptions("10s")
+	time.Sleep(90 * time.Second)
 }
 
 // is this doing anything?
@@ -101,7 +104,7 @@ func (s *TestSuite) TearDownSuite() {
 	s.T().Logf("\nTearDownSuite")
 
 	s.T().Logf("Resetting configmap")
-	s.resetConfigOptions()
+	s.setConfigOptions("1m")
 
 	// make sure necessary tags/labels deleted? I would maybe save current tags and current labels?
 

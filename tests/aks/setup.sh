@@ -13,8 +13,8 @@ export AKS_RESOURCE_GROUP=${AKS_NAME}-rg
 export MC_RESOURCE_GROUP=MC_${AKS_RESOURCE_GROUP}_${AKS_NAME}-cluster_westus2
 
 # mkdir ~/aks 
-export AZURE_AUTH_LOCATION=${PWD}/tests/aks/creds.json
-export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/identity.json
+export AZURE_AUTH_LOCATION=${PWD}/tests/aks/${AKS_NAME}-creds.json
+export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/${AKS_NAME}-identity.json
 
 az ad sp create-for-rbac --skip-assignment > $AZURE_AUTH_LOCATION
 
