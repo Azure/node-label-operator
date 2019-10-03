@@ -18,6 +18,7 @@ import (
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 func Test(t *testing.T) {
@@ -467,7 +468,6 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 	s.UpdateConfigOptions(configOptions)
 }
 
-// will be named TestARMTagToNodeLabelResourceGroupFilter
 func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
@@ -555,20 +555,26 @@ func (s *TestSuite) TestCustomLabelPrefix() {
 		"tree3": to.StringPtr("fir"),
 	}
 
-	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = "cloudprovider.tags"
-	s.UpdateConfigOptions(configOptions)
-
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
 	numStartingTags := len(computeResource.Tags())
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.LabelPrefix = "cloudprovider.tags"
+	s.UpdateConfigOptions(configOptions)
+	WaitForReconcile() // wait because more labels are going to be added
+
+	// delete labels with "azure.tags" prefix
+	s.DeleteLabelsWithPrefix(nodeList.Items, controller.DefaultLabelPrefix)
+
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	WaitForReconcile() // wait for labels to update
 
+	// I think these nodes aren't updated is the problem
+	// except they are
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
@@ -580,23 +586,25 @@ func (s *TestSuite) TestCustomLabelPrefix() {
 	for key := range tags {
 		validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
 		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
-			// check that tag was deleted
 			_, ok := node.Labels[validLabelName]
-			assert.False(ok)
+			assert.False(ok) // check that tag was deleted
+
 		}
 	}
-	for _, node := range nodeList.Items {
-		// checking to see if original labels are there.
-		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
-	}
+	// also delete any other labels with the prefix
+	s.DeleteLabelsWithPrefix(nodeList.Items, configOptions.LabelPrefix)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
 	configOptions.LabelPrefix = controller.DefaultLabelPrefix
 	s.UpdateConfigOptions(configOptions)
+	WaitForReconcile()                    // wait for tags with 'azure.tags' prefix to come back
+	for _, node := range nodeList.Items { // checking to see if original labels are there
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
+	}
 }
 
-// will be named TestARMTagToNodeLabel_CustomLabelPrefix
+// will be named TestARMTagToNodeLabel_EmptyLabelPrefix
 func (s *TestSuite) TestEmptyLabelPrefix() {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
@@ -607,16 +615,22 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 		"flower3": to.StringPtr("orchid"),
 	}
 
-	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = ""
-	s.UpdateConfigOptions(configOptions)
-
+	// get current tags so I can make sure to delete them later?
 	computeResource := s.NewAzComputeResourceClient()
+	startingTags := computeResource.Tags()
 	nodeList := s.GetNodes()
 	numStartingTags := len(computeResource.Tags())
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
+
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.LabelPrefix = ""
+	s.UpdateConfigOptions(configOptions)
+	WaitForReconcile()
+
+	// delete labels with "azure.tags" prefix
+	s.DeleteLabelsWithPrefix(nodeList.Items, controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	WaitForReconcile() // wait for labels to update
@@ -646,8 +660,23 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 			assert.False(ok)
 		}
 	}
+	// delete labels from pre-existing tags
 	for _, node := range nodeList.Items {
-		// checking to see if original labels are there.
+		newLabels := map[string]*string{}
+		for key, val := range startingTags {
+			if _, ok := node.Labels[key]; ok {
+				delete(node.Labels, key)
+				newLabels[key] = nil
+			} else {
+				newLabels[key] = val
+			}
+		}
+		// err := s.client.Update(context.Background(), &node)
+		patch, err := controller.LabelPatchWithDelete(newLabels)
+		require.NoError(err)
+		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
+		require.NoError(err)
+		// checking to see if original labels are there
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 
@@ -733,6 +762,7 @@ func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions)
 	updatedConfigOptions := s.GetConfigOptions()
 	require.Equal(s.T(), configOptions.SyncDirection, updatedConfigOptions.SyncDirection)
 	require.Equal(s.T(), configOptions.LabelPrefix, updatedConfigOptions.LabelPrefix)
+	require.Equal(s.T(), configOptions.ConflictPolicy, updatedConfigOptions.ConflictPolicy)
 	require.Equal(s.T(), configOptions.ResourceGroupFilter, updatedConfigOptions.ResourceGroupFilter)
 	s.T().Logf("Config options - syncDirection: %s, conflictPolicy: %s, minSyncPeriod: %s",
 		configOptions.SyncDirection, configOptions.ConflictPolicy, configOptions.MinSyncPeriod)
@@ -802,6 +832,7 @@ func (s *TestSuite) UpdateLabelsOnNodes(nodes []corev1.Node, labels map[string]s
 		for key, val := range labels {
 			node.Labels[key] = val
 		}
+		// should this be a patch instead?
 		err := s.client.Update(context.Background(), &node)
 		require.NoError(s.T(), err)
 	}
@@ -869,6 +900,24 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 			delete(node.Labels, key)
 		}
 		err := s.client.Update(context.Background(), &node)
+		require.NoError(s.T(), err)
+	}
+}
+
+func (s *TestSuite) DeleteLabelsWithPrefix(nodes []corev1.Node, labelPrefix string) {
+	for _, node := range nodes {
+		newLabels := map[string]*string{}
+		for key, val := range node.Labels {
+			if controller.HasLabelPrefix(key, labelPrefix) {
+				delete(node.Labels, key)
+				newLabels[key] = nil
+			} else {
+				newLabels[key] = &val
+			}
+		}
+		patch, err := controller.LabelPatchWithDelete(newLabels)
+		require.NoError(s.T(), err)
+		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
 		require.NoError(s.T(), err)
 	}
 }

@@ -265,7 +265,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 		return nil, nil
 	}
 
-	patch, err := labelPatchWithDelete(newLabels)
+	patch, err := LabelPatchWithDelete(newLabels)
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +326,7 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 
 func (r *ReconcileNodeLabel) updateMinSyncPeriodLabels(node *corev1.Node) error {
 	r.lastUpdateLabel(node)
-	patch, err := labelPatch(node.Labels)
+	patch, err := LabelPatch(node.Labels)
 	if err != nil {
 		return err
 	}
@@ -411,7 +411,7 @@ func timeToUpdate(node *corev1.Node) bool {
 	return lastUpdate.Before(syncPeriodStart)
 }
 
-func labelPatch(labels map[string]string) ([]byte, error) {
+func LabelPatch(labels map[string]string) ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"labels": labels,
@@ -419,7 +419,7 @@ func labelPatch(labels map[string]string) ([]byte, error) {
 	})
 }
 
-func labelPatchWithDelete(labels map[string]*string) ([]byte, error) {
+func LabelPatchWithDelete(labels map[string]*string) ([]byte, error) {
 	return json.Marshal(map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"labels": labels,
