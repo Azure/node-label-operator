@@ -17,11 +17,13 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
 
 1. Create a cluster.
 2. Authentication:
-    1. If using Azure MSI (Managed Service Identity) through [aad-pod-identity](https://github.com/Azure/aad-pod-identity), create AzureIdentity and AzureIdentityBinding resources for your cluster,
+    1. If using Azure MSI (Managed Service Identity) through [AAD Pod Identity](https://github.com/Azure/aad-pod-identity), create AzureIdentity and AzureIdentityBinding resources for your cluster,
     using the service principal or user-assigned identities already in your cluster.
     You may need to create a Managed Identity Operator RBAC role. You will need to define AzureIdentity and AzureIdentityBinding in configuration files
     and run something like `kubectl apply -f samples/aadpodidentity.yaml` and `kubectl apply -f samples/aadpodidentitybinding.yaml` where
-    `samples/aadpodidentity.yaml` and `samples/aadpodidentitybinding.yaml` are configuration files filled with your MSI information.
+    [`samples/aadpodidentity.yaml`](https://github.com/Azure/node-label-operator/blob/master/samples/aadpodidentity.yaml) and
+    [`samples/aadpodidentitybinding.yaml`](https://github.com/Azure/node-label-operator/blob/master/samples/aadpodidentitybinding.yaml) are configuration files filled with your MSI information,
+    in the format in the linked YAML files.
     You will need to have only one user-assigned identity on the compute resource (VM or VMSS) that the operator is running on.
     2. If using Azure AD Application ID and Secret credentials, set the following environment variables:
         ```
@@ -40,7 +42,7 @@ until the namespace has been created.
     3. `tagPrefix`: Not supported currently.
     4. `conflictPolicy`: The policy for conflicting tag/label values. ARM tags or node labels can be given priority. ARM tags have priority by default
     (`arm-precedence`). Another option is to not update tags and raise Kubernetes event (`ignore`) and `node-precedence`. If set to `node-precedence`, labels will
-    not be deleted when the corresponding tags are deleted.
+    not be deleted when the corresponding tags are deleted, even if `syncDirection` is set to `arm-to-node`.
     5. `resourceGroupFilter`: The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1, RG2, RG3).
     Default is `none` for no filter. Otherwise, use name of (single) resource group.
     6. `minSyncPeriod`: The minimum interval between updates to a node, in a format accepted by golang time library for Duration. Decimal numbers followed by
