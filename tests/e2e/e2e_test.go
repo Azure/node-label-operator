@@ -72,7 +72,7 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 		}
 	}
 	for _, node := range nodeList.Items {
-		// Checking to see if original labels are there.
+		// checking to see if original labels are there.
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 }
@@ -94,7 +94,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
-	numStartingTags := len(computeResource.Tags()) // I should probably do this before setting config map
+	numStartingTags := len(computeResource.Tags())
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
@@ -105,8 +105,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	// check that compute resource has accurate labels
 	s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
 
-	// delete node labels first b/c if I delete tags first, they will just come back
-	// clean up nodes by deleting labels
+	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
 	for _, node := range computeResourceNodes {
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
@@ -114,7 +113,6 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	s.T().Logf("Deleted test labels on nodes: %s", computeResource.Name())
 
 	// clean up compute resource by deleting tags, because currently operator doesn't do that for label->tag sync
-	// is this the most recent version of computeResource?
 	for key := range labels {
 		delete(computeResource.Tags(), key)
 	}
@@ -244,8 +242,7 @@ func (s *TestSuite) TestARMTagToNodeLabelInvalidLabels() {
 		}
 	}
 	for _, node := range nodeList.Items {
-		// Checking to see if original labels are there.
-		// expected 19, actual 20...
+		// Checking to see if original labels are there
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 }
@@ -270,7 +267,7 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 
 	computeResource := s.NewAzComputeResourceClient()
 	nodeList := s.GetNodes()
-	numStartingTags := len(computeResource.Tags()) // I should probably do this before setting config map
+	numStartingTags := len(computeResource.Tags())
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
@@ -280,8 +277,7 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	// check that compute resource has accurate labels
 	s.CheckAzComputeResourceTagsForLabels(computeResource, validLabels, numStartingTags)
 
-	// delete node labels first b/c if I delete tags first, they will just come back
-	// clean up nodes by deleting labels
+	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
 	for _, node := range computeResourceNodes {
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
@@ -328,7 +324,6 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 	WaitForReconcile() // wait to update node labels
 	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels)
 
-	// numUntouchedLabels := s.GetNumLabelsPerNode(nodeList) // nodelist hasn't been updated yet :)
 	numUntouchedLabels := map[string]int{}
 	for _, node := range computeResourceNodes {
 		numUntouchedLabels[node.Name] = numStartingLabels[node.Name] + 1 // include whatever other tags were added
@@ -351,7 +346,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 		}
 	}
 	for _, node := range nodeList.Items {
-		// Checking to see if original labels are there.
+		// checking to see if original labels are there
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
 	}
 }
@@ -401,8 +396,7 @@ func (s *TestSuite) TestConflictPolicyNodePrecedence() {
 	s.CheckNodeLabelsForTags(computeResourceNodes, expectedLabels, numStartingLabels)
 	s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags+1)
 
-	// delete node labels first b/c if I delete tags first, they will just come back
-	// clean up nodes by deleting labels
+	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
 	for _, node := range computeResourceNodes {
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
@@ -410,7 +404,6 @@ func (s *TestSuite) TestConflictPolicyNodePrecedence() {
 	s.T().Logf("Deleted test labels on nodes: %s", computeResource.Name())
 
 	// clean up compute resource by deleting tags, because currently operator doesn't do that for label->tag sync
-	// is this the most recent version of computeResource?
 	for key := range labels {
 		delete(computeResource.Tags(), key)
 	}
@@ -483,11 +476,6 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 // will be named TestARMTagToNodeLabelResourceGroupFilter
 // how do I get multiple resource groups? aks cluster with multiple node pools?
 func (s *TestSuite) TestResourceGroupFilter() {
-	// assert := assert.New(s.T())
-	// require := require.New(s.T())
-
-	// testing that nothing happens because resource group doesn't exist
-	// but I feel like maybe that should be validated and caught as an error?
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.NodeToARM
 	configOptions.ResourceGroupFilter = s.ResourceGroup // reset at end?
@@ -497,6 +485,16 @@ func (s *TestSuite) TestResourceGroupFilter() {
 	// I will need to try tagging all VMs, or at least one in each nodepool,
 	// and checking that only the one in the chosen resource group was updated
 	// but how should I get the other resource groups?
+}
+
+// will be named TestNodeLabelToARMTag_TooManyTags
+func (s *TestSuite) TestTooManyTags() {
+	configOptions := s.GetConfigOptions()
+	configOptions.SyncDirection = controller.NodeToARM
+	s.UpdateConfigOptions(configOptions)
+	WaitForReconcile()
+
+	// > maxNumTags labels
 }
 
 // Helper functions
@@ -547,7 +545,7 @@ func (s *TestSuite) NewVM() controller.VirtualMachine {
 
 func (s *TestSuite) GetConfigOptions() *controller.ConfigOptions {
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := controller.OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
+	optionsNamespacedName := controller.OptionsConfigMapNamespacedName()
 	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
 	require.NoError(s.T(), err)
 	configOptions, err := controller.NewConfigOptions(configMap)
@@ -565,8 +563,8 @@ func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions)
 	updatedConfigOptions := s.GetConfigOptions()
 	require.Equal(s.T(), configOptions.SyncDirection, updatedConfigOptions.SyncDirection)
 	require.Equal(s.T(), configOptions.ResourceGroupFilter, updatedConfigOptions.ResourceGroupFilter)
-	s.T().Logf("Config options - syncDirection: %s, labelPrefix: %s, minSyncPeriod: %s",
-		configOptions.SyncDirection, configOptions.LabelPrefix, configOptions.MinSyncPeriod)
+	s.T().Logf("Config options - syncDirection: %s, conflictPolicy: %s, minSyncPeriod: %s",
+		configOptions.SyncDirection, configOptions.ConflictPolicy, configOptions.MinSyncPeriod)
 }
 
 func (s *TestSuite) GetNodes() *corev1.NodeList {
@@ -579,7 +577,7 @@ func (s *TestSuite) GetNodes() *corev1.NodeList {
 		s.T().Logf("Failed listing nodes: %s", err)
 	}
 	require.NoError(err)
-	// should I somehow pass the expected number of nodes and check it here?
+	// pass the expected number of nodes and check it here?
 	assert.NotEqual(0, len(nodeList.Items))
 	s.T().Logf("Successfully found %d nodes", len(nodeList.Items))
 
@@ -707,7 +705,3 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 func WaitForReconcile() {
 	time.Sleep(20 * time.Second)
 }
-
-// tests to write:
-// node-to-arm: too many tags or labels
-// resource group filter
