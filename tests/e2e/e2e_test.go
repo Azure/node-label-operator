@@ -119,9 +119,6 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	err := computeResource.Update(context.Background())
 	require.NoError(err)
 	assert.Equal(numStartingTags, len(computeResource.Tags()))
-
-	// do I need to make sure that configOptions.SyncDirection is reset? is this what's causing issues somehow?
-	// are there tags syncing that I'm not expecting?
 }
 
 func (s *TestSuite) TestTwoWaySync() {
