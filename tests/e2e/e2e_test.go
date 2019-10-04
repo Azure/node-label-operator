@@ -30,8 +30,6 @@ func Test(t *testing.T) {
 	suite.Run(t, &TestSuite{Cluster: c})
 }
 
-// aks uses vms and aks-engine uses vm for master and vmss for workers
-
 func (s *TestSuite) TestARMTagToNodeLabel() {
 	tags := map[string]*string{
 		"fruit1": to.StringPtr("watermelon"),
