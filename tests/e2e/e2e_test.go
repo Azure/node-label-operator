@@ -142,7 +142,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	WaitForReconcile()
 
 	for _, node := range computeResourceNodes {
-		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet? sleep for 1m?
+		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
 	}
 	s.T().Logf("Deleted test labels on nodes: %s", computeResource.Name())
 
@@ -387,13 +387,9 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numCurrentLabels, configOptions) // node labels shouldn't have changed
 	s.CheckAzComputeResourceTagsForLabels(computeResource, expectedLabels, numStartingTags)       // should be the new tags
 
-	// clean up compute resource by deleting tags
 	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
 	WaitForReconcile() // wait for labels to be removed, assuming minSyncPeriod=1m
 
-	// check that corresponding labels were deleted
-	// should I actually be checking startingTags?
-	// s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
 	s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
 
 	configOptions = s.GetConfigOptions()
@@ -515,7 +511,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 		"flower3": to.StringPtr("orchid"),
 	}
 
-	// get current tags so I can make sure to delete them later?
+	// get current tags so I can make sure to delete them later
 	computeResource := s.NewAzComputeResourceClient()
 	startingTags := computeResource.Tags()
 	nodeList := s.GetNodes()
