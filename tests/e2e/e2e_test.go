@@ -564,8 +564,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 	WaitForReconcile() // wait because more labels are going to be added
 
 	// delete labels with "azure.tags" prefix
-	nodeList = s.GetNodes()
-	s.DeleteLabelsWithPrefix(nodeList, controller.DefaultLabelPrefix)
+	s.DeleteLabelsWithPrefix(controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	WaitForReconcile() // wait for labels to update
@@ -593,7 +592,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 	s.UpdateConfigOptions(configOptions)
 	WaitForReconcile() // wait for tags with 'azure.tags' prefix to come back
 
-	s.DeleteLabelsWithPrefix(nodeList, customPrefix)
+	s.DeleteLabelsWithPrefix(customPrefix)
 	nodeList = s.GetNodes()
 	for _, node := range nodeList.Items { // checking to see if original labels are there
 		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
@@ -626,7 +625,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	WaitForReconcile()
 
 	// delete labels with "azure.tags" prefix
-	s.DeleteLabelsWithPrefix(nodeList, controller.DefaultLabelPrefix)
+	s.DeleteLabelsWithPrefix(controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	WaitForReconcile() // wait for labels to update
@@ -639,16 +638,14 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	// check that corresponding labels were not deleted
 	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 
+	// get updated version?
 	// delete corresponding tag labels
 	for _, node := range computeResourceNodes {
 		newLabels := map[string]*string{}
-		// for key := range tags {
-		for key, val := range node.Labels {
+		for key := range node.Labels {
 			if _, ok := tags[key]; ok {
 				delete(node.Labels, key)
 				newLabels[key] = nil
-			} else {
-				newLabels[key] = &val
 			}
 		}
 		patch, err := controller.LabelPatchWithDelete(newLabels)
@@ -656,7 +653,6 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
 		require.NoError(err)
 	}
-	// need to update
 
 	// check that corresponding labels were deleted
 	err := s.client.List(context.Background(), nodeList)
@@ -676,14 +672,13 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	s.UpdateConfigOptions(configOptions)
 
 	// delete labels from pre-existing tags
+	nodeList = s.GetNodes()
 	for _, node := range nodeList.Items {
 		newLabels := map[string]*string{}
-		for key, val := range startingTags {
+		for key := range startingTags {
 			if _, ok := node.Labels[key]; ok {
 				delete(node.Labels, key)
 				newLabels[key] = nil
-			} else {
-				newLabels[key] = val
 			}
 		}
 		patch, err := controller.LabelPatchWithDelete(newLabels)
@@ -781,17 +776,14 @@ func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions)
 }
 
 func (s *TestSuite) GetNodes() *corev1.NodeList {
-	assert := assert.New(s.T())
-	require := require.New(s.T())
-
 	nodeList := &corev1.NodeList{}
 	err := s.client.List(context.Background(), nodeList)
 	if err != nil {
 		s.T().Logf("Failed listing nodes: %s", err)
 	}
-	require.NoError(err)
+	require.NoError(s.T(), err)
 	// pass the expected number of nodes and check it here?
-	assert.NotEqual(0, len(nodeList.Items))
+	assert.NotEqual(s.T(), 0, len(nodeList.Items))
 	s.T().Logf("Successfully found %d nodes", len(nodeList.Items))
 
 	return nodeList
@@ -916,17 +908,16 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 	}
 }
 
-func (s *TestSuite) DeleteLabelsWithPrefix(nodeList *corev1.NodeList, labelPrefix string) {
+func (s *TestSuite) DeleteLabelsWithPrefix(labelPrefix string) {
+	nodeList := &corev1.NodeList{}
 	err := s.client.List(context.Background(), nodeList)
 	require.NoError(s.T(), err)
 	for _, node := range nodeList.Items {
 		newLabels := map[string]*string{}
-		for key, val := range node.Labels {
+		for key := range node.Labels {
 			if controller.HasLabelPrefix(key, labelPrefix) {
 				delete(node.Labels, key)
 				newLabels[key] = nil
-			} else {
-				newLabels[key] = &val
 			}
 		}
 		patch, err := controller.LabelPatchWithDelete(newLabels)
