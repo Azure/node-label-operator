@@ -86,6 +86,9 @@ func ConvertLabelValToValidTagVal(labelVal string) string {
 }
 
 func LabelWithPrefix(labelName, prefix string) string {
+	if len(prefix) == 0 {
+		return labelName
+	}
 	return fmt.Sprintf("%s/%s", prefix, labelName)
 }
 
