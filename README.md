@@ -13,7 +13,7 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
 - [Azure CLI](https://docs.microsoft.com/en-us/cli/azure/install-azure-cli?view=azure-cli-latest)
 - access to an Azure account
 
-## Setup Instructions
+## Setup Overview 
 
 1. Create a cluster.
 2. Authentication:
@@ -26,7 +26,7 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
     in the format in the linked YAML files.
     You will need to have only one user-assigned identity on the compute resource (VM or VMSS) that the operator is running on.
     2. If using Azure AD Application ID and Secret credentials, set the following environment variables:
-        ```
+        ```sh
         export AZURE_SUBSCRIPTION_ID=
         export AZURE_TENANT_ID=
         export AZURE_CLIENT_ID=
@@ -34,7 +34,7 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
         ```
 2. Set up the Kubernetes ConfigMap. It must be named 'node-label-operator' and have namespace 'node-label-operator-system' to allow to controller to
 watch it in addition to nodes. `kubectl apply -f samples/configmap.yaml`. If you don't, default settings will be used. You won't be able to create the configmap
-until the namespace has been created.
+until the namespace has been created. You can look at [`samples/configmap.yaml`](https://github.com/Azure/node-label-operator/blob/master/samples/configmap.yaml).
     1. `syncDirection`: Direction of synchronization. Default is `arm-to-node`. Other options are `two-way` and `node-to-arm`. Currently only `arm-to-node` is fully
     implemented and tested.
     2. `labelPrefix`: The node label prefix, with a default of `azure.tags`. An empty prefix will be permitted. However if you use an empty prefix, node labels
@@ -43,7 +43,7 @@ until the namespace has been created.
     4. `conflictPolicy`: The policy for conflicting tag/label values. ARM tags or node labels can be given priority. ARM tags have priority by default
     (`arm-precedence`). Another option is to not update tags and raise Kubernetes event (`ignore`) and `node-precedence`. If set to `node-precedence`, labels will
     not be deleted when the corresponding tags are deleted, even if `syncDirection` is set to `arm-to-node`.
-    5. `resourceGroupFilter`: The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1, RG2, RG3).
+    5. `resourceGroupFilter`: The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1 but not RG2 or RG3).
     Default is `none` for no filter. Otherwise, use name of (single) resource group.
     6. `minSyncPeriod`: The minimum interval between updates to a node, in a format accepted by golang time library for Duration. Decimal numbers followed by
     time unit suffix. Valid time units are "ns", "us", "ms", "s", "m", "h". Ex: "300ms", "1.5h", or "2h45m". It may take one default period (5m) for this
@@ -52,9 +52,16 @@ until the namespace has been created.
 4. Running the operator:
     1. To run the controller locally, run `make` to build the controller, then `make run` to run the controller on your cluster.
     2. To deploy the controller in your cluster, make sure IMG is set (for example, "<dockerhub-username>/node-label-manager") and run `make docker-build docker-push` and `make deploy`.
+    ```sh
+    export IMG=<dockerhub-username>/node-label-manager
+    make docker-build docker-push
+    make deploy
+    ```
 
 For a general idea of how to set up a cluster from scratch with this operator installed, see the commands used for setting up test clusters with
 [AKS](https://github.com/Azure/node-label-operator/blob/master/tests/aks/setup.sh) and [aks-engine](https://github.com/Azure/node-label-operator/blob/master/tests/aks-engine/setup.sh).
+
+To see the tags on your VM or VMSS synced as labels on nodes: `kubectl get nodes --show-labels`.
 
 ## Other Pages
 

@@ -3,6 +3,7 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
+    aadpodidbinding: node-label-operator
   name: system
 ---
 apiVersion: apps/v1

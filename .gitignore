@@ -23,3 +23,4 @@ tests/aks-engine/aadpodidentity.yaml
 tests/aks-engine/aadpodidentitybinding.yaml
 tests/aks/aadpodidentity.yaml
 tests/aks/aadpodidentitybinding.yaml
+config/quickstart/quickstart.yaml
