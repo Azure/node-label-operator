@@ -1,6 +1,6 @@
 ## Tutorial
 
-1. Create a kubernetes cluster with either AKS or aks-engine.
+1. Create a kubernetes cluster with either [AKS](https://docs.microsoft.com/en-us/azure/aks/kubernetes-walkthrough) or [aks-engine](https://github.com/Azure/aks-engine).
 
 2. Authenticate with [AAD Pod Identity](https://github.com/Azure/aad-pod-identity).
     1. Create identity, if not already created. You can find the identitie(s) with `az vmss identity show -g <resource-group> -n <vmss-name>` or `az vm identity show -g <resource-group> -n <vm-name>`. There should only be one identity.
@@ -95,7 +95,7 @@ kubectl apply -f configmap.yaml
 | `labelPrefix` | The node label prefix. An empty prefix will be permitted. However if you use an empty prefix, node labels will not be deleted when the corresponding ARM tag is deleted so using a non-empty prefix is strongly recommended. | `azure.tags` |
 | `conflictPolicy` | The policy for conflicting tag/label values. ARM tags or node labels can be given priority. ARM tags have priority by default (`arm-precedence`). Another option is to not update tags and raise Kubernetes event (`ignore`) and `node-precedence`. If set to `node-precedence`, labels will not be deleted when the corresponding tags are deleted, even if `syncDirection` is set to `arm-to-node`. | `arm-precedence` |
 | `resourceGroupFilter` | The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1 but not RG2 or RG3). Default is `none` for no filter. Otherwise, use name of (single) resource group. | `none` |
-| `minSyncPeriod` | The minimum interval between updates to a node, in a format accepted by golang time library for Duration. Decimal numbers followed by time unit suffix. Valid time units are "ns", "us", "ms", "s", "m", "h". Ex: "300ms", "1.5h", or "2h45m". It may take one default period (5m) for this to update. | "5m" |
+| `minSyncPeriod` | The minimum interval between updates to a node, in a format accepted by golang time library for Duration. Decimal numbers followed by time unit suffix. Valid time units are "ns", "us", "ms", "s", "m", "h". Ex: "300ms", "1.5h", or "2h45m". It may take one default period (5m) for this to update. | `5m` |
 | `tagPrefix` | Not supported currently. | |
 
 
@@ -103,8 +103,9 @@ kubectl apply -f configmap.yaml
 
 5. Deploy controller
 
-<!-- make docker-build docker-push -->
+```
 make deploy
+```
 
 6. See it in action.
 

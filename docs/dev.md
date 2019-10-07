@@ -18,6 +18,8 @@ To run the controller locally, run `make run`.
 
 Make sure you have authentication with aad-pod-identity set up. You will need to have a Dockerhub account and be logged in.
 
+The file `config/default/manager_image_patch.yaml` should have `image: <your-image-name>` as a result of `docker-build`.
+
 ```sh
 export IMG="<dockerhub-username>/node-label"
 make docker-build docker-push
