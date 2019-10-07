@@ -11,9 +11,18 @@ export AZURE_CLIENT_ID=
 export AZURE_CLIENT_SECRET=
 ```
 
-`make`
-`make run`
+To compile the codebase, run `make`.
+To run the controller locally, run `make run`.
 
+### Running in cluster
+
+Make sure you have authentication with aad-pod-identity set up. You will need to have a Dockerhub account and be logged in.
+
+```sh
+export IMG="<dockerhub-username>/node-label"
+make docker-build docker-push
+make deploy
+```
 
 ### Testing
 
