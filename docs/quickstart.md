@@ -1,4 +1,4 @@
-Getting Started
+## Getting Started
 
 1. Assume you already have a cluster.
 

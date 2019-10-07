@@ -11,6 +11,9 @@ export AZURE_CLIENT_ID=
 export AZURE_CLIENT_SECRET=
 ```
 
+`make`
+`make run`
+
 
 ### Testing
 
