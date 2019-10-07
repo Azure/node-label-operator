@@ -1,15 +1,24 @@
 ## Tutorial
 
-1. Create cluster
+1. Create a kubernetes cluster with either AKS or aks-engine.
 
 2. Authenticate with [AAD Pod Identity](https://github.com/Azure/aad-pod-identity).
     1. Create identity, if not already created. You can find the identitie(s) with `az vmss identity show -g <resource-group> -n <vmss-name>` or `az vm identity show -g <resource-group> -n <vm-name>`. There should only be one identity.
-    `az identity create -g $MC_RESOURCE_GROUP -n ${AKS_NAME}-identity -o json > $AZURE_IDENTITY_LOCATION`.
+    ```sh
+    export AZURE_IDENTITY="<cluster-name>-identity"
+    export MC_RESOURCE_GROUP="<resource-group>"
+    export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/${AZURE_IDENTITY}.json
+    az identity create -g $MC_RESOURCE_GROUP -n ${AZURE_IDENTITY} -o json > $AZURE_IDENTITY_LOCATION
+    ```
 
     2. Assign roles.
     ```sh
-    az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID
-    az role assignment create --role "Contributor" --assignee $PRINCIPAL_ID --scope /subscriptions/${E2E_SUBSCRIPTION_ID}/resourceGroups/${MC_RESOURCE_GROUP}
+    export RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
+    export CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
+    export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
+
+    az role assignment create --role "Managed Identity Operator" --assignee $AZURE_PRINCIPAL_ID --scope $RESOURCE_ID
+    az role assignment create --role "Contributor" --assignee $AZURE_PRINCIPAL_ID --scope /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourceGroups/${MC_RESOURCE_GROUP}
     ```
 
     3. Create necessary aad-pod-identity resources.
@@ -97,19 +106,23 @@ kubectl apply -f configmap.yaml
 <!-- make docker-build docker-push -->
 make deploy
 
+6. See it in action.
+
+To see the tags on your VM or VMSS synced as labels on nodes: `kubectl get nodes --show-labels`.
+
+```sh
+az resource tag --id "<vmss-resource-id>" --tags="env=test ..."
+
+kubectl get nodes --show-labels
+```
+
+Or you can delete labels which have your label prefix and see them come back.
 
 
-<!-- 4. Running the operator: -->
-<!--     1. To run the controller locally, run `make` to build the controller, then `make run` to run the controller on your cluster. -->
-<!--     2. To deploy the controller in your cluster, make sure IMG is set (for example, "<dockerhub-username>/node-label-manager") and run `make docker-build docker-push` and `make deploy`. -->
-<!--     ```sh -->
-<!--     export IMG=<dockerhub-username>/node-label-manager -->
-<!--     make docker-build docker-push -->
-<!--     make deploy -->
-<!--     ``` -->
+### Additional help
 
 For a general idea of how to set up a cluster from scratch with this operator installed, see the commands used for setting up test clusters with
 [AKS](https://github.com/Azure/node-label-operator/blob/master/tests/aks/setup.sh) and [aks-engine](https://github.com/Azure/node-label-operator/blob/master/tests/aks-engine/setup.sh).
 
-To see the tags on your VM or VMSS synced as labels on nodes: `kubectl get nodes --show-labels`.
+You can look at [debugging](https://github.com/Azure/node-label-operator/blob/master/docs/debugging.md) for some tips on how to look into whether the operator is working properly.
 
