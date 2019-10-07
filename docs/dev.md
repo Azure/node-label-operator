@@ -47,3 +47,10 @@ export AZURE_CLIENT_SECRET=
 
 Run `make e2e-test`.
 
+#### Linting
+
+Run `make lint` and correct any problems that show up.
+
+#### Code coverage
+
+You can get a better look at code coverage by using `go tool cover -html=cover.out`.
