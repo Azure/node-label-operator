@@ -12,6 +12,7 @@ import (
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/Azure/node-label-operator/azure"
 	"github.com/Azure/node-label-operator/controller"
+	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
@@ -30,7 +31,7 @@ func Test(t *testing.T) {
 	suite.Run(t, &TestSuite{Cluster: c})
 }
 
-func (s *TestSuite) TestARMTagToNodeLabel() {
+func (s *TestSuite) TestARMTagToNodeLabel_DefaultSettings() {
 	tags := map[string]*string{
 		"fruit1": to.StringPtr("watermelon"),
 		"fruit2": to.StringPtr("dragonfruit"),
@@ -48,14 +49,16 @@ func (s *TestSuite) TestARMTagToNodeLabel() {
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
-	WaitForReconcile() // wait for labels to update
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	gomega.Eventually(func() bool {
+		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+		return err == nil
+	}, 30*time.Second, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed
-
-	s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
+	gomega.Eventually(func() bool {
+		err := s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
+		return err == nil
+	}, 30*time.Second, 5*time.Second)
 }
 
 func (s *TestSuite) TestNodeLabelToARMTag() {
@@ -79,9 +82,9 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	s.UpdateLabelsOnNodes(computeResourceNodes, labels)
-	WaitForReconcile() // wait for tags to update
-
-	s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
+	gomega.Eventually(func() {
+		s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
+	}, 30*time.Second, 5*time.Second)
 
 	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -126,11 +129,11 @@ func (s *TestSuite) TestTwoWaySync() {
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 
 	s.UpdateLabelsOnNodes(computeResourceNodes, labels)
-	WaitForReconcile()
-
-	s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	gomega.Eventually(func() bool {
+		s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
+		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+		return err == nil
+	}, 30*time.Second, 3*time.Second)
 
 	// reset configmap first so that tags and labels won't automatically come back?
 
@@ -139,11 +142,11 @@ func (s *TestSuite) TestTwoWaySync() {
 
 	// clean up nodes by deleting labels
 	s.CleanupNodes(computeResourceNodes, labels)
-	WaitForReconcile()
-
-	for _, node := range computeResourceNodes {
-		assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
-	}
+	gomega.Eventually(func() {
+		for _, node := range computeResourceNodes {
+			assert.Equal(numStartingLabels[node.Name], len(node.Labels)) // might not be true yet?
+		}
+	}, 30*time.Second, 3*time.Second)
 	s.T().Logf("Deleted test labels on nodes: %s", computeResource.Name())
 
 	// still need to remove labels from azure resource
@@ -191,14 +194,14 @@ func (s *TestSuite) TestARMTagToNodeLabel_InvalidLabels() {
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
-	WaitForReconcile() // wait for labels to update
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, validTags, numStartingLabels, configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, validTags, numStartingLabels, configOptions)
+	}, 30*time.Second, 3*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed
-
-	s.CheckTagLabelsDeletedFromNodes(validTags, configOptions, numStartingLabels)
+	gomega.Eventually(func() {
+		s.CheckTagLabelsDeletedFromNodes(validTags, configOptions, numStartingLabels)
+	}, 30*time.Second, 3*time.Second)
 }
 
 func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
@@ -225,9 +228,9 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	s.UpdateLabelsOnNodes(computeResourceNodes, labels)
-	WaitForReconcile() // wait for tags to update
-
-	s.CheckAzComputeResourceTagsForLabels(computeResource, validLabels, numStartingTags)
+	gomega.Eventually(func() {
+		s.CheckAzComputeResourceTagsForLabels(computeResource, validLabels, numStartingTags)
+	}, 30*time.Second, 3*time.Second)
 
 	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -269,8 +272,9 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 
 	// update Azure compute resource first with original values
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, startingTags)
-	WaitForReconcile() // wait to update node labels
-	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels, configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels, configOptions)
+	}, 30*time.Second, 3*time.Second)
 
 	numUntouchedLabels := map[string]int{}
 	for _, node := range computeResourceNodes {
@@ -278,13 +282,14 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 	}
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	// wait for labels to update to new values, with arm tag value overriding
-	WaitForReconcile()
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numUntouchedLabels, configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, tags, numUntouchedLabels, configOptions)
+	}, 30*time.Second, 3*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed, assuming minSyncPeriod=1m
-
-	s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
+	gomega.Eventually(func() {
+		s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
+	}, 30*time.Second, 3*time.Second)
 }
 
 // Assumption is that node precedence is being used with NodeToARM, otherwise
@@ -318,17 +323,17 @@ func (s *TestSuite) TestConflictPolicyNodePrecedence() {
 	numStartingLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
-	s.UpdateLabelsOnNodes(computeResourceNodes, startingLabels)
-	WaitForReconcile() // wait for tags to update
-
-	// check that compute resource has accurate labels
-	s.CheckAzComputeResourceTagsForLabels(computeResource, startingLabels, numStartingTags)
+	gomega.Eventually(func() {
+		s.UpdateLabelsOnNodes(computeResourceNodes, startingLabels)
+		// check that compute resource has accurate labels
+		s.CheckAzComputeResourceTagsForLabels(computeResource, startingLabels, numStartingTags)
+	}, 30*time.Second, 3*time.Second)
 
 	s.UpdateLabelsOnNodes(computeResourceNodes, labels)
-	WaitForReconcile() // wait for tags to update
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, expectedLabels, numStartingLabels, configOptions)
-	s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags+1)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, expectedLabels, numStartingLabels, configOptions)
+		s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags+1)
+	}, 30*time.Second, 3*time.Second)
 
 	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -378,19 +383,21 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, startingTags)
-	WaitForReconcile()
-	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels, configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels, configOptions)
+	}, 30*time.Second, 5*time.Second)
 
 	numCurrentLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
-	WaitForReconcile()
-	s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numCurrentLabels, configOptions) // node labels shouldn't have changed
-	s.CheckAzComputeResourceTagsForLabels(computeResource, expectedLabels, numStartingTags)       // should be the new tags
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numCurrentLabels, configOptions) // node labels shouldn't have changed
+		s.CheckAzComputeResourceTagsForLabels(computeResource, expectedLabels, numStartingTags)       // should be the new tags
+	}, 30*time.Second, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed, assuming minSyncPeriod=1m
-
-	s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
+	gomega.Eventually(func() {
+		s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
+	}, 30*time.Second, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.ConflictPolicy = controller.ARMPrecedence
@@ -415,24 +422,23 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
-	WaitForReconcile() // wait for labels to (not) update
-
-	// check that nodes don't have labels, technically not deleted
-	s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
+	gomega.Eventually(func() {
+		// check that nodes don't have labels, technically not deleted
+		s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
+	}, 30*time.Second, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.ResourceGroupFilter = s.ResourceGroup
 	s.UpdateConfigOptions(configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	}, 30*time.Second, 5*time.Second)
 
-	WaitForReconcile() // wait for labels to update
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
-
-	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed
-
-	// check that corresponding labels were deleted
-	s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
+	gomega.Eventually(func() {
+		s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
+		// check that corresponding labels were deleted
+		s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
+	}, 30*time.Second, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.ResourceGroupFilter = controller.DefaultResourceGroupFilter
@@ -462,42 +468,48 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 	configOptions.SyncDirection = controller.ARMToNode
 	configOptions.LabelPrefix = customPrefix
 	s.UpdateConfigOptions(configOptions)
+	// gomega.Eventually(func() {
 	WaitForReconcile() // wait because more labels are going to be added
+	// }, 30*time.Second, 5*time.Second)
 
 	// delete labels with "azure.tags" prefix
 	s.DeleteLabelsWithPrefix(controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
-	WaitForReconcile() // wait for labels to update
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	}, 30*time.Second, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed
+	gomega.Eventually(func() {
+		// check that corresponding labels were deleted
+		err := s.client.List(context.Background(), nodeList)
+		require.NoError(err)
+		for key := range tags {
+			validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
+			for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
+				_, ok := node.Labels[validLabelName]
+				assert.False(ok) // check that tag was deleted
 
-	// check that corresponding labels were deleted
-	err := s.client.List(context.Background(), nodeList)
-	require.NoError(err)
-	for key := range tags {
-		validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
-		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
-			_, ok := node.Labels[validLabelName]
-			assert.False(ok) // check that tag was deleted
-
+			}
 		}
-	}
+	}, 30*time.Second, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
 	configOptions.LabelPrefix = controller.DefaultLabelPrefix
 	s.UpdateConfigOptions(configOptions)
+	// gomega.Eventually(func() {
 	WaitForReconcile() // wait for tags with 'azure.tags' prefix to come back
+	// }, 30*time.Second, 5*time.Second)
 
 	s.DeleteLabelsWithPrefix(customPrefix)
-	nodeList = s.GetNodes()
-	for _, node := range nodeList.Items { // checking to see if original labels are there
-		assert.Equal(numStartingLabels[node.Name], len(node.Labels))
-	}
+	gomega.Eventually(func() {
+		nodeList = s.GetNodes()
+		for _, node := range nodeList.Items { // checking to see if original labels are there
+			assert.Equal(numStartingLabels[node.Name], len(node.Labels))
+		}
+	}, 30*time.Second, 5*time.Second)
 }
 
 // will be named TestARMTagToNodeLabel_EmptyLabelPrefix
@@ -523,21 +535,23 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	configOptions.SyncDirection = controller.ARMToNode
 	configOptions.LabelPrefix = ""
 	s.UpdateConfigOptions(configOptions)
+	// gomega.Eventually(func() {
 	WaitForReconcile()
+	// }, 30*time.Second, 5*time.Second)
 
 	// delete labels with "azure.tags" prefix
 	s.DeleteLabelsWithPrefix(controller.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
-	WaitForReconcile() // wait for labels to update
-
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	gomega.Eventually(func() {
+		s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	}, 30*time.Second, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
-	WaitForReconcile() // wait for labels to be removed
-
-	// check that corresponding labels were not deleted b/c no label prefix
-	s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	gomega.Eventually(func() {
+		// check that corresponding labels were not deleted b/c no label prefix
+		s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
+	}, 30*time.Second, 5*time.Second)
 
 	// delete corresponding tag labels
 	err := s.client.List(context.Background(), nodeList)
@@ -602,7 +616,9 @@ func (s *TestSuite) TestTooManyTags() {
 	configOptions := s.GetConfigOptions()
 	configOptions.SyncDirection = controller.NodeToARM
 	s.UpdateConfigOptions(configOptions)
+	// gomega.Eventually(func() {
 	WaitForReconcile()
+	// }, 30*time.Second, 5*time.Second)
 
 	// > maxNumTags labels
 }
@@ -762,12 +778,14 @@ func (s *TestSuite) UpdateLabelsOnNodes(nodes []corev1.Node, labels map[string]s
 	return updatedNodes
 }
 
-func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]*string, numStartingLabels map[string]int, configOptions *controller.ConfigOptions) {
+func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]*string, numStartingLabels map[string]int, configOptions *controller.ConfigOptions) error {
 	s.T().Logf("Checking nodes for accurate labels")
 	for _, node := range nodes {
 		updatedNode := &corev1.Node{}
-		err := s.client.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode)
-		require.NoError(s.T(), err)
+		if err := s.client.Get(context.Background(), types.NamespacedName{Name: node.Name, Namespace: node.Namespace}, updatedNode); err != nil {
+			return err
+		}
+		// require.NoError(s.T(), err)
 		assert.Equal(s.T(), len(tags), len(updatedNode.Labels)-numStartingLabels[updatedNode.Name])
 		for key, val := range tags {
 			validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions) // make sure this is config options I use
@@ -776,6 +794,7 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 			assert.Equal(s.T(), *val, result)
 		}
 	}
+	return nil
 }
 
 func (s *TestSuite) CheckAzComputeResourceTagsForLabels(computeResource controller.ComputeResource, labels map[string]string, numStartingTags int) {
@@ -812,10 +831,12 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 	}
 }
 
-func (s *TestSuite) CheckTagLabelsDeletedFromNodes(tags map[string]*string, configOptions *controller.ConfigOptions, numStartingLabels map[string]int) {
+func (s *TestSuite) CheckTagLabelsDeletedFromNodes(tags map[string]*string, configOptions *controller.ConfigOptions, numStartingLabels map[string]int) error {
 	nodeList := &corev1.NodeList{}
-	err := s.client.List(context.Background(), nodeList)
-	require.NoError(s.T(), err)
+	if err := s.client.List(context.Background(), nodeList); err != nil {
+		return err
+	}
+	// require.NoError(s.T(), err)
 	for key := range tags {
 		validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
 		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
@@ -828,6 +849,7 @@ func (s *TestSuite) CheckTagLabelsDeletedFromNodes(tags map[string]*string, conf
 		// checking to see if original labels are there.
 		assert.Equal(s.T(), numStartingLabels[node.Name], len(node.Labels))
 	}
+	return nil
 }
 
 func (s *TestSuite) DeleteLabelsWithPrefix(labelPrefix string) {
