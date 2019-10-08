@@ -55,13 +55,13 @@ func (s *TestSuite) TestARMTagToNodeLabel_DefaultSettings() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 	g.Eventually(func() bool {
 		err := s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 }
 
 func (s *TestSuite) TestNodeLabelToARMTag() {
@@ -89,7 +89,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	g.Eventually(func() bool {
 		err := s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -139,7 +139,7 @@ func (s *TestSuite) TestTwoWaySync() {
 		err1 := s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags)
 		err2 := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 		return err1 == nil && err2 == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	// reset configmap first so that tags and labels won't automatically come back?
 
@@ -209,13 +209,13 @@ func (s *TestSuite) TestARMTagToNodeLabel_InvalidLabels() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, validTags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 	g.Eventually(func() bool {
 		err := s.CheckTagLabelsDeletedFromNodes(validTags, configOptions, numStartingLabels)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 }
 
 func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
@@ -246,7 +246,7 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	g.Eventually(func() bool {
 		err := s.CheckAzComputeResourceTagsForLabels(computeResource, validLabels, numStartingTags)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -293,7 +293,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	numUntouchedLabels := map[string]int{}
 	for _, node := range computeResourceNodes {
@@ -304,13 +304,13 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numUntouchedLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
 	g.Eventually(func() bool {
 		err := s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 }
 
 // Assumption is that node precedence is being used with NodeToARM, otherwise
@@ -351,14 +351,14 @@ func (s *TestSuite) TestConflictPolicyNodePrecedence() {
 		// check that compute resource has accurate labels
 		err := s.CheckAzComputeResourceTagsForLabels(computeResource, startingLabels, numStartingTags)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.UpdateLabelsOnNodes(computeResourceNodes, labels)
 	g.Eventually(func() bool {
 		err1 := s.CheckNodeLabelsForTags(computeResourceNodes, expectedLabels, numStartingLabels, configOptions)
 		err2 := s.CheckAzComputeResourceTagsForLabels(computeResource, labels, numStartingTags+1)
 		return err1 == nil && err2 == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	// delete node labels first b/c if tags are deleted first, they will just come back
 	s.CleanupNodes(computeResourceNodes, labels)
@@ -413,7 +413,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	numCurrentLabels := s.GetNumLabelsPerNode(nodeList)
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
@@ -421,13 +421,13 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 		err1 := s.CheckNodeLabelsForTags(computeResourceNodes, startingTags, numCurrentLabels, configOptions) // node labels shouldn't have changed
 		err2 := s.CheckAzComputeResourceTagsForLabels(computeResource, expectedLabels, numStartingTags)       // should be the new tags
 		return err1 == nil && err2 == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, startingTags, numStartingTags)
 	g.Eventually(func() bool {
 		err := s.CheckTagLabelsDeletedFromNodes(startingTags, configOptions, numStartingLabels)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.ConflictPolicy = controller.ARMPrecedence
@@ -458,7 +458,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 		// check that nodes don't have labels, technically not deleted
 		err := s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.ResourceGroupFilter = s.ResourceGroup
@@ -466,14 +466,14 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	g.Eventually(func() bool {
 		err1 := s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 		// check that corresponding labels were deleted
 		err2 := s.CheckTagLabelsDeletedFromNodes(tags, configOptions, numStartingLabels)
 		return err1 == nil && err2 == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.ResourceGroupFilter = controller.DefaultResourceGroupFilter
@@ -513,13 +513,13 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 			}
 		}
 		return true
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 	g.Eventually(func() bool {
@@ -538,7 +538,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 			}
 		}
 		return true
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
 	configOptions.SyncDirection = controller.ARMToNode
@@ -554,7 +554,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 			}
 		}
 		return true
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 }
 
 // will be named TestARMTagToNodeLabel_EmptyLabelPrefix
@@ -589,14 +589,14 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	g.Eventually(func() bool {
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	s.CleanupAzComputeResource(computeResource, tags, numStartingTags)
 	g.Eventually(func() bool {
 		// check that corresponding labels were not deleted b/c no label prefix
 		err := s.CheckNodeLabelsForTags(computeResourceNodes, tags, numStartingLabels, configOptions)
 		return err == nil
-	}, 30*time.Second, 5*time.Second)
+	}, time.Minute, 5*time.Second)
 
 	// delete corresponding tag labels
 	err := s.client.List(context.Background(), nodeList)
