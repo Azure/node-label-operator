@@ -84,7 +84,3 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 .PHONY: controller-gen
-
-quickstart:
-	cat config/quickstart/quickstart.yaml | envsubst | kubectl apply -f - 
-.PHONY: quickstart

@@ -45,7 +45,7 @@ az role assignment create --role "Contributor" --assignee $AZURE_IDENTITY_PRINCI
 Clone this repository. From the root directory of the repository, run:
 
 ```sh
-make quickstart
+cat config/quickstart/quickstart.yaml | envsubst | kubectl apply -f - 
 ```
 
 To see the tags on your VM or VMSS synced as labels on nodes: `kubectl get nodes --show-labels`.
