@@ -11,6 +11,7 @@ require (
 	github.com/Azure/go-autorest/autorest/validation v0.2.0 // indirect
 	github.com/go-logr/logr v0.1.0
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/onsi/gomega v1.7.0
 	github.com/prometheus/common v0.2.0
 	github.com/stretchr/testify v1.3.0
 	gopkg.in/yaml.v2 v2.2.2
