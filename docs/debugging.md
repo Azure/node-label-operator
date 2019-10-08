@@ -21,11 +21,11 @@ Do not set minSyncPeriod to too short a period since that may cause throttling. 
 
 ### Service Principal Authentication
 
-- For authentication with service principal, make sure all necessary environment variables are set to the service principal being used with your cluster. You need `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`.
+For authentication with service principal, which is used to run the controlle locally, make sure all necessary environment variables are set to the service principal being used with your cluster. You need `AZURE_SUBSCRIPTION_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET`.
 
-### aad-pod-identity Authentication 
+### AAD Pod Identity Authentication 
 
-Check that you created the proper roles. If you're not sure, looking the mic pod logs might help. Make sure to edit mic deployment (`kubectl edit deployment mic`) to have argument '--v=6' and print logs using `kubectl logs <mic-pod-name>`. Check all mic pods if you don't find the leader right away.
+Check that you created the proper roles. If you're not sure, looking at the mic pod logs might help. Make sure to edit mic deployment (`kubectl edit deployment mic`) to have argument '--v=6' and print logs using `kubectl logs <mic-pod-name>`. Check all mic pods if you don't find the leader right away.
 
 Make sure your selector for your identity binding 'node-label-operator' and your controller pods have labels 'aadpodidbinding=node-label-operator'. You can check by running `kubectl get pods --namespace=node-label-operator-system --show-labels`.
 

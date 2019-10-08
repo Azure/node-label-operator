@@ -25,7 +25,9 @@
 
     For deploying with RBAC-enabled:
 
-    `kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master/deploy/infra/deployment-rbac.yaml`
+    ```sh
+    kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master/deploy/infra/deployment-rbac.yaml
+    ```
 
     4. Create identity resources.
 
@@ -92,7 +94,6 @@ kubectl apply -f configmap.yaml
 | setting | description | default |
 | ------- | ----------- | ------- |
 | `syncDirection` | Direction of synchronization. Default is `arm-to-node`. Other options are `two-way` and `node-to-arm`. Currently only `arm-to-node` is fully implemented and tested. | `arm-to-node` |
-<!-- | `labelPrefix` | The node label prefix. An empty prefix will be permitted. However if you use an empty prefix, node labels will not be deleted when the corresponding ARM tag is deleted so using a non-empty prefix is strongly recommended. | `azure.tags` | -->
 | `labelPrefix` | The node label prefix. An empty prefix will not be permitted. | `azure.tags` |
 | `conflictPolicy` | The policy for conflicting tag/label values. ARM tags or node labels can be given priority. ARM tags have priority by default (`arm-precedence`). Another option is to not update tags and raise Kubernetes event (`ignore`) and `node-precedence`. If set to `node-precedence`, labels will not be deleted when the corresponding tags are deleted, even if `syncDirection` is set to `arm-to-node`. | `arm-precedence` |
 | `resourceGroupFilter` | The controller can be limited to run on only nodes within a resource group filter (i.e. nodes that exist in RG1 but not RG2 or RG3). Default is `none` for no filter. Otherwise, use name of (single) resource group. | `none` |
@@ -104,7 +105,7 @@ kubectl apply -f configmap.yaml
 
 5. Deploy controller
 
-```
+```sh
 make deploy
 ```
 
