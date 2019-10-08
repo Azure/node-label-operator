@@ -11,8 +11,6 @@ import (
 	"time"
 
 	"github.com/Azure/go-autorest/autorest/to"
-	"github.com/Azure/node-label-operator/azure"
-	"github.com/Azure/node-label-operator/controller"
 	"github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -22,7 +20,11 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/Azure/node-label-operator/azure"
 	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
+	"github.com/Azure/node-label-operator/controller"
+	"github.com/Azure/node-label-operator/conversion"
+	"github.com/Azure/node-label-operator/conversion/options"
 )
 
 func Test(t *testing.T) {
@@ -44,7 +46,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_DefaultSettings() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.SyncDirection = options.ARMToNode
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -78,7 +80,7 @@ func (s *TestSuite) TestNodeLabelToARMTag() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.NodeToARM
+	configOptions.SyncDirection = options.NodeToARM
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -125,7 +127,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.TwoWay
+	configOptions.SyncDirection = options.TwoWay
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -178,7 +180,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	for _, node := range computeResourceNodes {
 		// needs to be key without prefix
 		for key := range node.Labels {
-			_, ok := tags[controller.LabelWithoutPrefix(key, controller.DefaultLabelPrefix)]
+			_, ok := tags[conversion.LabelWithoutPrefix(key, options.DefaultLabelPrefix)]
 			assert.False(ok)
 		}
 	}
@@ -198,7 +200,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_InvalidLabels() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.SyncDirection = options.ARMToNode
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -235,7 +237,7 @@ func (s *TestSuite) TestNodeLabelToARMTagInvalidTags() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.NodeToARM
+	configOptions.SyncDirection = options.NodeToARM
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -280,8 +282,8 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyARMPrecedence() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.ConflictPolicy = controller.ARMPrecedence
+	configOptions.SyncDirection = options.ARMToNode
+	configOptions.ConflictPolicy = options.ARMPrecedence
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -338,8 +340,8 @@ func (s *TestSuite) TestConflictPolicyNodePrecedence() {
 	}
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.NodeToARM
-	configOptions.ConflictPolicy = controller.NodePrecedence
+	configOptions.SyncDirection = options.NodeToARM
+	configOptions.ConflictPolicy = options.NodePrecedence
 	s.UpdateConfigOptions(configOptions)
 
 	computeResource := s.NewAzComputeResourceClient()
@@ -378,7 +380,7 @@ func (s *TestSuite) TestConflictPolicyNodePrecedence() {
 	assert.Equal(numStartingTags, len(computeResource.Tags()))
 
 	configOptions = s.GetConfigOptions()
-	configOptions.ConflictPolicy = controller.ARMPrecedence
+	configOptions.ConflictPolicy = options.ARMPrecedence
 	s.UpdateConfigOptions(configOptions)
 }
 
@@ -386,8 +388,8 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 	g := gomega.NewGomegaWithT(s.T())
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode // should be similar results either way
-	configOptions.ConflictPolicy = controller.Ignore
+	configOptions.SyncDirection = options.ARMToNode // should be similar results either way
+	configOptions.ConflictPolicy = options.Ignore
 	s.UpdateConfigOptions(configOptions)
 
 	startingTags := map[string]*string{
@@ -432,7 +434,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ConflictPolicyIgnore() {
 	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
-	configOptions.ConflictPolicy = controller.ARMPrecedence
+	configOptions.ConflictPolicy = options.ARMPrecedence
 	s.UpdateConfigOptions(configOptions)
 }
 
@@ -451,7 +453,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 
 	// update resource group filter to specify resource group that nodes aren't in
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.SyncDirection = options.ARMToNode
 	configOptions.ResourceGroupFilter = "non-existent-rg"
 	s.UpdateConfigOptions(configOptions)
 
@@ -478,7 +480,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_ResourceGroupFilter() {
 	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
-	configOptions.ResourceGroupFilter = controller.DefaultResourceGroupFilter
+	configOptions.ResourceGroupFilter = options.DefaultResourceGroupFilter
 	s.UpdateConfigOptions(configOptions)
 }
 
@@ -501,12 +503,12 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 
 	customPrefix := "cloudprovider.tags"
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.SyncDirection = options.ARMToNode
 	configOptions.LabelPrefix = customPrefix
 	s.UpdateConfigOptions(configOptions) // more labels are going to be added
 
 	// delete labels with "azure.tags" prefix
-	s.DeleteLabelsWithPrefix(controller.DefaultLabelPrefix)
+	s.DeleteLabelsWithPrefix(options.DefaultLabelPrefix)
 	g.Eventually(func() bool {
 		nodeList = s.GetNodes()
 		for _, node := range nodeList.Items { // checking there are the same amount of tags as started with
@@ -531,7 +533,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 			return false
 		}
 		for key := range tags {
-			validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
+			validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
 			for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
 				_, ok := node.Labels[validLabelName]
 				if ok { // check that tag was deleted
@@ -543,8 +545,8 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 	}, time.Minute, 5*time.Second)
 
 	configOptions = s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = controller.DefaultLabelPrefix
+	configOptions.SyncDirection = options.ARMToNode
+	configOptions.LabelPrefix = options.DefaultLabelPrefix
 	s.UpdateConfigOptions(configOptions) // tags with 'azure.tags' prefix should come back
 
 	s.DeleteLabelsWithPrefix(customPrefix)
@@ -580,12 +582,12 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	computeResourceNodes := s.GetNodesOnAzComputeResource(computeResource, nodeList)
 
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
+	configOptions.SyncDirection = options.ARMToNode
 	configOptions.LabelPrefix = ""
 	s.UpdateConfigOptions(configOptions)
 
 	// delete labels with "azure.tags" prefix
-	s.DeleteLabelsWithPrefix(controller.DefaultLabelPrefix)
+	s.DeleteLabelsWithPrefix(options.DefaultLabelPrefix)
 
 	computeResource = s.UpdateTagsOnAzComputeResource(computeResource, tags)
 	g.Eventually(func() bool {
@@ -623,7 +625,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	require.NoError(err)
 	for key := range tags {
 		// validLabelName should be same as key
-		validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
+		validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
 		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
 			_, ok := node.Labels[validLabelName]
 			assert.False(ok) // check that tag was deleted
@@ -631,8 +633,8 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	}
 
 	configOptions = s.GetConfigOptions()
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.LabelPrefix = controller.DefaultLabelPrefix
+	configOptions.SyncDirection = options.ARMToNode
+	configOptions.LabelPrefix = options.DefaultLabelPrefix
 	s.UpdateConfigOptions(configOptions)
 
 	// delete labels from pre-existing tags
@@ -661,7 +663,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 // will be named TestNodeLabelToARMTag_TooManyTags
 func (s *TestSuite) TestTooManyTags() {
 	configOptions := s.GetConfigOptions()
-	configOptions.SyncDirection = controller.NodeToARM
+	configOptions.SyncDirection = options.NodeToARM
 	s.UpdateConfigOptions(configOptions) // make sure tags have time to update
 
 	// > maxNumTags labels
@@ -713,19 +715,19 @@ func (s *TestSuite) NewVM() azrsrc.VirtualMachine {
 	return *azrsrc.NewVMInitialized(context.Background(), s.ResourceGroup, &vmClient, &vm)
 }
 
-func (s *TestSuite) GetConfigOptions() *controller.ConfigOptions {
+func (s *TestSuite) GetConfigOptions() *options.ConfigOptions {
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := controller.OptionsConfigMapNamespacedName()
+	optionsNamespacedName := options.OptionsConfigMapNamespacedName()
 	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
 	require.NoError(s.T(), err)
-	configOptions, err := controller.NewConfigOptions(configMap)
+	configOptions, err := options.NewConfigOptions(configMap)
 	require.NoError(s.T(), err)
 
 	return configOptions
 }
 
-func (s *TestSuite) UpdateConfigOptions(configOptions *controller.ConfigOptions) {
-	configMap, err := controller.GetConfigMapFromConfigOptions(configOptions)
+func (s *TestSuite) UpdateConfigOptions(configOptions *options.ConfigOptions) {
+	configMap, err := options.GetConfigMapFromConfigOptions(configOptions)
 	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
 	require.NoError(s.T(), err)
@@ -822,7 +824,7 @@ func (s *TestSuite) UpdateLabelsOnNodes(nodes []corev1.Node, labels map[string]s
 	return updatedNodes
 }
 
-func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]*string, numStartingLabels map[string]int, configOptions *controller.ConfigOptions) error {
+func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]*string, numStartingLabels map[string]int, configOptions *options.ConfigOptions) error {
 	s.T().Logf("Checking nodes for accurate labels")
 	numErrs := 0
 	for _, node := range nodes {
@@ -834,7 +836,7 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 			return fmt.Errorf("len(tags) != len(updatedNode.Labels)-numStartingLabels[updatedNode.Name] (%d != %d)", len(tags), len(updatedNode.Labels)-numStartingLabels[updatedNode.Name])
 		}
 		for key, val := range tags {
-			validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions) // make sure this is config options I use
+			validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix) // make sure this is config options I use
 			result, ok := updatedNode.Labels[validLabelName]
 			// assert.True(s.T(), ok)
 			if !ok {
@@ -903,14 +905,14 @@ func (s *TestSuite) CleanupNodes(nodes []corev1.Node, labels map[string]string) 
 	}
 }
 
-func (s *TestSuite) CheckTagLabelsDeletedFromNodes(tags map[string]*string, configOptions *controller.ConfigOptions, numStartingLabels map[string]int) error {
+func (s *TestSuite) CheckTagLabelsDeletedFromNodes(tags map[string]*string, configOptions *options.ConfigOptions, numStartingLabels map[string]int) error {
 	nodeList := &corev1.NodeList{}
 	if err := s.client.List(context.Background(), nodeList); err != nil {
 		return err
 	}
 	numErrs := 0
 	for key := range tags {
-		validLabelName := controller.ConvertTagNameToValidLabelName(key, *configOptions)
+		validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
 		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
 			_, ok := node.Labels[validLabelName]
 			if ok {
@@ -939,7 +941,7 @@ func (s *TestSuite) DeleteLabelsWithPrefix(labelPrefix string) {
 	for _, node := range nodeList.Items {
 		newLabels := map[string]*string{}
 		for key := range node.Labels {
-			if controller.HasLabelPrefix(key, labelPrefix) {
+			if conversion.HasLabelPrefix(key, labelPrefix) {
 				delete(node.Labels, key)
 				newLabels[key] = nil
 			}

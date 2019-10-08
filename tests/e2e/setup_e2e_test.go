@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/node-label-operator/azure"
-	"github.com/Azure/node-label-operator/controller"
+	"github.com/Azure/node-label-operator/conversion/options"
 )
 
 var Scheme = runtime.NewScheme()
@@ -58,15 +58,15 @@ func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
 
 func (s *TestSuite) setConfigOptions(minSyncPeriod string) {
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := controller.OptionsConfigMapNamespacedName()
+	optionsNamespacedName := options.OptionsConfigMapNamespacedName()
 	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
 	require.NoError(s.T(), err)
-	configOptions, err := controller.NewConfigOptions(configMap)
+	configOptions, err := options.NewConfigOptions(configMap)
 	require.NoError(s.T(), err)
-	configOptions.SyncDirection = controller.ARMToNode
-	configOptions.ConflictPolicy = controller.ARMPrecedence
+	configOptions.SyncDirection = options.ARMToNode
+	configOptions.ConflictPolicy = options.ARMPrecedence
 	configOptions.MinSyncPeriod = minSyncPeriod
-	configMap, err = controller.GetConfigMapFromConfigOptions(configOptions)
+	configMap, err = options.GetConfigMapFromConfigOptions(configOptions)
 	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
 	require.NoError(s.T(), err)

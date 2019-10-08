@@ -20,6 +20,8 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/to"
 	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
+	"github.com/Azure/node-label-operator/conversion"
+	"github.com/Azure/node-label-operator/conversion/options"
 )
 
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
@@ -37,8 +39,8 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			},
 			map[string]string{},
 			map[string]string{
-				LabelWithPrefix("env", DefaultLabelPrefix): "test",
-				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
+				conversion.LabelWithPrefix("env", options.DefaultLabelPrefix): "test",
+				conversion.LabelWithPrefix("v", options.DefaultLabelPrefix):   "1",
 			},
 		},
 		{
@@ -51,8 +53,8 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"favfruit": "banana",
 			}, // won't be contained in patch though it shouldn't go away
 			map[string]string{
-				LabelWithPrefix("env", DefaultLabelPrefix): "test",
-				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
+				conversion.LabelWithPrefix("env", options.DefaultLabelPrefix): "test",
+				conversion.LabelWithPrefix("v", options.DefaultLabelPrefix):   "1",
 			},
 		},
 		{
@@ -61,11 +63,11 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"env": to.StringPtr("test"),
 			},
 			map[string]string{
-				LabelWithPrefix("env", DefaultLabelPrefix): "test",
-				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
+				conversion.LabelWithPrefix("env", options.DefaultLabelPrefix): "test",
+				conversion.LabelWithPrefix("v", options.DefaultLabelPrefix):   "1",
 			},
 			map[string]string{
-				LabelWithPrefix("env", DefaultLabelPrefix): "test",
+				conversion.LabelWithPrefix("env", options.DefaultLabelPrefix): "test",
 			},
 		},
 		{
@@ -75,11 +77,11 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"v":   to.StringPtr("2"),
 			},
 			map[string]string{
-				LabelWithPrefix("env", DefaultLabelPrefix): "test",
-				LabelWithPrefix("v", DefaultLabelPrefix):   "1",
+				conversion.LabelWithPrefix("env", options.DefaultLabelPrefix): "test",
+				conversion.LabelWithPrefix("v", options.DefaultLabelPrefix):   "1",
 			},
 			map[string]string{
-				LabelWithPrefix("v", DefaultLabelPrefix): "2",
+				conversion.LabelWithPrefix("v", options.DefaultLabelPrefix): "2",
 			},
 		},
 		{
@@ -88,10 +90,10 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 				"role": to.StringPtr("master"),
 			},
 			map[string]string{
-				LabelWithPrefix("role", "k8s"): "master",
+				conversion.LabelWithPrefix("role", "k8s"): "master",
 			},
 			map[string]string{
-				LabelWithPrefix("role", DefaultLabelPrefix): "master",
+				conversion.LabelWithPrefix("role", options.DefaultLabelPrefix): "master",
 			},
 		},
 		{
@@ -102,12 +104,12 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 			},
 			map[string]string{},
 			map[string]string{
-				LabelWithPrefix("agentPool", DefaultLabelPrefix): "agentpool1",
+				conversion.LabelWithPrefix("agentPool", options.DefaultLabelPrefix): "agentpool1",
 			},
 		},
 	}
 
-	config := DefaultConfigOptions() // tag-to-node only
+	config := options.DefaultConfigOptions() // tag-to-node only
 	r := NewFakeNodeLabelReconciler()
 
 	for _, tt := range armTagsTest {
@@ -190,9 +192,9 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 		},
 	}
 
-	config := DefaultConfigOptions()
-	config.SyncDirection = NodeToARM
-	config.ConflictPolicy = NodePrecedence
+	config := options.DefaultConfigOptions()
+	config.SyncDirection = options.NodeToARM
+	config.ConflictPolicy = options.NodePrecedence
 	r := NewFakeNodeLabelReconciler()
 
 	for _, tt := range nodeLabelsTest {
@@ -287,22 +289,22 @@ func TestTimeToUpdate(t *testing.T) {
 func TestLabelDeletionAllowed(t *testing.T) {
 	var labelDeletionAllowedTest = []struct {
 		name          string
-		configOptions *ConfigOptions
+		configOptions *options.ConfigOptions
 		expected      bool
 	}{
 		{
 			"test1",
-			&ConfigOptions{
-				LabelPrefix:    DefaultLabelPrefix,
-				ConflictPolicy: ARMPrecedence,
+			&options.ConfigOptions{
+				LabelPrefix:    options.DefaultLabelPrefix,
+				ConflictPolicy: options.ARMPrecedence,
 			},
 			true,
 		},
 		{
 			"test2",
-			&ConfigOptions{
+			&options.ConfigOptions{
 				LabelPrefix:    "cool-custom-label-prefix",
-				ConflictPolicy: Ignore,
+				ConflictPolicy: options.Ignore,
 			},
 			true,
 		},

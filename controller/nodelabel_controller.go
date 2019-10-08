@@ -5,7 +5,6 @@ package controller
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -20,13 +19,14 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/event"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/Azure/node-label-operator/azure"
 	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
+	"github.com/Azure/node-label-operator/conversion"
+	"github.com/Azure/node-label-operator/conversion/options"
 )
 
 const (
@@ -55,11 +55,11 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
+	optionsNamespacedName := options.OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
 		// create default options config map and requeue
-		configMap, err := NewDefaultConfigOptions()
+		configMap, err := options.NewDefaultConfigOptions()
 		if err != nil {
 			log.Error(err, "failed to get new default options configmap")
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
@@ -70,7 +70,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		}
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
-	configOptions, err := NewConfigOptions(configMap)
+	configOptions, err := options.NewConfigOptions(configMap)
 	if err != nil {
 		log.Error(err, "failed to load options from config file")
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
@@ -96,7 +96,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		log.Error(err, "invalid provider ID", "node", node.Name)
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 	}
-	if configOptions.ResourceGroupFilter != DefaultResourceGroupFilter &&
+	if configOptions.ResourceGroupFilter != options.DefaultResourceGroupFilter &&
 		provider.ResourceGroup != configOptions.ResourceGroupFilter {
 		log.V(1).Info("found node not in resource group filter", "resource group filter", configOptions.ResourceGroupFilter, "node", node.Name)
 		return ctrl.Result{}, nil
@@ -129,13 +129,13 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 
 // pass VMSS -> tags info and assign to nodes on VMs (unless node already has label)
 func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource,
-	node *corev1.Node, configOptions *ConfigOptions) error {
+	node *corev1.Node, configOptions *options.ConfigOptions) error {
 	vmss, err := azrsrc.NewVMSS(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
 
-	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
+	if configOptions.SyncDirection == options.TwoWay || configOptions.SyncDirection == options.ARMToNode {
 		// only update if there are changes to labels
 		patch, err := r.applyTagsToNodes(namespacedName, *vmss, node, configOptions)
 		if err != nil {
@@ -149,7 +149,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 	}
 
 	// assign all labels on Node to VMSS, if not already there
-	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
+	if configOptions.SyncDirection == options.TwoWay || configOptions.SyncDirection == options.NodeToARM {
 		// only update if there are changes to labels
 		tags, err := r.applyLabelsToAzureResource(namespacedName, *vmss, node, configOptions)
 		if err != nil {
@@ -169,13 +169,13 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 }
 
 func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource,
-	node *corev1.Node, configOptions *ConfigOptions) error {
+	node *corev1.Node, configOptions *options.ConfigOptions) error {
 	vm, err := azrsrc.NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
 
-	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == ARMToNode {
+	if configOptions.SyncDirection == options.TwoWay || configOptions.SyncDirection == options.ARMToNode {
 		patch, err := r.applyTagsToNodes(namespacedName, *vm, node, configOptions)
 		if err != nil {
 			return err
@@ -187,7 +187,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 		}
 	}
 
-	if configOptions.SyncDirection == TwoWay || configOptions.SyncDirection == NodeToARM {
+	if configOptions.SyncDirection == options.TwoWay || configOptions.SyncDirection == options.NodeToARM {
 		tags, err := r.applyLabelsToAzureResource(namespacedName, *vm, node, configOptions)
 		if err != nil {
 			return err
@@ -206,20 +206,20 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 }
 
 // return patch with new labels, if any, otherwise return nil for no new labels or an error
-func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource azrsrc.ComputeResource, node *corev1.Node, configOptions *ConfigOptions) ([]byte, error) {
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource azrsrc.ComputeResource, node *corev1.Node, configOptions *options.ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	newLabels := map[string]*string{} // should allow for null JSON values
 	for tagName, tagVal := range computeResource.Tags() {
-		if !ValidLabelName(tagName) {
+		if !conversion.ValidLabelName(tagName) {
 			log.V(0).Info("invalid label name", "tag name", tagName)
 			continue
 		}
-		if !ValidLabelVal(*tagVal) {
+		if !conversion.ValidLabelVal(*tagVal) {
 			log.V(0).Info("invalid label value", "tag value", *tagVal)
 			continue
 		}
-		validLabelName := ConvertTagNameToValidLabelName(tagName, *configOptions)
+		validLabelName := conversion.ConvertTagNameToValidLabelName(tagName, configOptions.LabelPrefix)
 		labelVal, ok := node.Labels[validLabelName]
 		if !ok {
 			// add tag as label
@@ -227,14 +227,14 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 			newLabels[validLabelName] = tagVal
 		} else if labelVal != *tagVal {
 			switch configOptions.ConflictPolicy {
-			case ARMPrecedence:
+			case options.ARMPrecedence:
 				// set label anyway
 				log.V(1).Info("overriding existing node label with ARM tag", "tag name", tagName, "tag value", tagVal)
 				newLabels[validLabelName] = tagVal
-			case NodePrecedence:
+			case options.NodePrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
-			case Ignore:
+			case options.Ignore:
 				// raise k8s event
 				r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
 					fmt.Sprintf("ARM tag was not applied to node because a different value for '%s' already exists (%s != %s).", tagName, *tagVal, labelVal))
@@ -249,9 +249,9 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	// if conflict policy is node precedence (which it will most likely not be), then don't delete tags if they exist on node
 	if labelDeletionAllowed(configOptions) {
 		for labelFullName, labelVal := range node.Labels {
-			if HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
+			if conversion.HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
 				// check if exists on vm/vmss
-				labelName := LabelWithoutPrefix(labelFullName, configOptions.LabelPrefix)
+				labelName := conversion.LabelWithoutPrefix(labelFullName, configOptions.LabelPrefix)
 				_, ok := computeResource.Tags()[labelName]
 				if !ok { // if label doesn't exist on ARM resource, delete
 					log.V(1).Info("deleting label from node", "label name", labelFullName, "label value", labelVal)
@@ -274,25 +274,25 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	return patch, nil
 }
 
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource azrsrc.ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource azrsrc.ComputeResource, node *corev1.Node, configOptions *options.ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
-	if len(computeResource.Tags()) >= maxNumTags {
+	if len(computeResource.Tags()) >= conversion.MaxNumTags {
 		log.V(0).Info("can't add any more tags", "number of tags", len(computeResource.Tags()))
 		return computeResource.Tags(), nil
 	}
 
 	newTags := map[string]*string{}
 	for labelName, labelVal := range node.Labels {
-		if !ValidTagName(labelName, *configOptions) {
+		if !conversion.ValidTagName(labelName, configOptions.LabelPrefix) {
 			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
-		if !ValidTagVal(labelVal) {
+		if !conversion.ValidTagVal(labelVal) {
 			log.V(2).Info("invalid tag name", "label name", labelName)
 			continue
 		}
-		validTagName := ConvertLabelNameToValidTagName(labelName, *configOptions)
+		validTagName := conversion.ConvertLabelNameToValidTagName(labelName, configOptions.LabelPrefix)
 		tagVal, ok := computeResource.Tags()[validTagName]
 		if !ok {
 			// add label as tag
@@ -300,14 +300,14 @@ func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.Nam
 			newTags[validTagName] = to.StringPtr(labelVal)
 		} else if *tagVal != labelVal {
 			switch configOptions.ConflictPolicy {
-			case NodePrecedence:
+			case options.NodePrecedence:
 				// set tag anyway
 				log.V(1).Info("overriding existing ARM tag with node label", "label name", labelName, "label value", labelVal)
 				newTags[validTagName] = to.StringPtr(labelVal)
-			case ARMPrecedence:
+			case options.ARMPrecedence:
 				// do nothing
 				log.V(0).Info("name->value conflict found", "node label value", labelVal, "ARM tag value", *tagVal)
-			case Ignore:
+			case options.Ignore:
 				// raise k8s event
 				r.Recorder.Event(node, "Warning", "ConflictingTagLabelValues",
 					fmt.Sprintf("node label was not applied to Azure resource because a different value for '%s' already exists (%s != %s).", labelName, labelVal, *tagVal))
@@ -360,74 +360,4 @@ func (r *ReconcileNodeLabel) SetupWithManager(mgr ctrl.Manager) error {
 			GenericFunc: genericFunc,
 		}).
 		Complete(r)
-}
-
-func updateFunc(e event.UpdateEvent) bool {
-	node, ok := e.ObjectNew.(*corev1.Node)
-	if !ok {
-		return false
-	}
-	return timeToUpdate(node)
-}
-
-// somehow there's a ton of create events
-func createFunc(e event.CreateEvent) bool {
-	node, ok := e.Object.(*corev1.Node)
-	if !ok {
-		return false
-	}
-	return timeToUpdate(node)
-}
-
-// return true because vmss might need to be updated?
-func deleteFunc(e event.DeleteEvent) bool {
-	return true
-}
-
-func genericFunc(e event.GenericEvent) bool {
-	return false
-}
-
-func timeToUpdate(node *corev1.Node) bool {
-	label, ok := node.Labels[lastUpdateLabel]
-	if !ok {
-		return true // let things through the first time
-	}
-	var period time.Duration
-	// if lastUpdate formatted incorrectly, do I let stuff through?
-	lastUpdate, err := time.Parse(time.RFC3339, strings.ReplaceAll(label, ".", ":"))
-	if err != nil {
-		return true // letting everything through if label formatted incorrectly
-	}
-	minSyncPeriod, ok := node.Labels[minSyncPeriodLabel]
-	if ok {
-		period, err = time.ParseDuration(minSyncPeriod)
-		if err != nil {
-			period = FiveMinutes
-		}
-	} else {
-		period = FiveMinutes
-	}
-	syncPeriodStart := time.Now().Add(-period)
-	return lastUpdate.Before(syncPeriodStart)
-}
-
-func LabelPatch(labels map[string]string) ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": labels,
-		},
-	})
-}
-
-func LabelPatchWithDelete(labels map[string]*string) ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		"metadata": map[string]interface{}{
-			"labels": labels,
-		},
-	})
-}
-
-func labelDeletionAllowed(configOptions *ConfigOptions) bool {
-	return configOptions.LabelPrefix != "" && (configOptions.ConflictPolicy == ARMPrecedence || configOptions.ConflictPolicy == Ignore)
 }
