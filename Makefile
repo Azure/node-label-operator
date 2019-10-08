@@ -84,17 +84,3 @@ else
 CONTROLLER_GEN=$(shell which controller-gen)
 endif
 .PHONY: controller-gen
-
-quickstart:
-	sed 's/<sub-id>/'"${AZURE_SUBSCRIPTION_ID}"'/g' samples/quickstart.yaml | \
-		sed 's/<resource-group>/'"${AZURE_RESOURCE_GROUP}"'/g' | \
-		sed 's/<identity-name>/'"${AZURE_IDENTITY}"'/g' | \
-    	sed 's/<client-id>/'"${AZURE_IDENTITY_CLIENT_ID}"'/g' \
-		> config/quickstart/quickstarttmp.yaml
-	sed 's/<binding-name>/'"${AZURE_IDENTITY}"'-binding/g' config/quickstart/quickstarttmp.yaml | \
-		sed 's/<identity-name>/'"${AZURE_IDENTITY}"'/g' | \
-		sed 's/<selector-name>/node-label-operator/g' \
-		> config/quickstart/quickstart.yaml
-	rm config/quickstart/quickstarttmp.yaml
-	kubectl apply -f config/quickstart/quickstart.yaml
-.PHONY: quickstart

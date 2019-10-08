@@ -253,19 +253,19 @@ spec:
 apiVersion: "aadpodidentity.k8s.io/v1"
 kind: AzureIdentity
 metadata:
-    name: <identity-name> 
+    name: ${AZURE_IDENTITY} 
 spec:
     type: 0
-    ResourceID: /subscriptions/<sub-id>/resourcegroups/<resource-group>/providers/Microsoft.ManagedIdentity/userAssignedIdentities/<identity-name>
-    ClientID: <client-id>
+    ResourceID: /subscriptions/${AZURE_SUBSCRIPTION_ID}/resourcegroups/${AZURE_RESOURCE_GROUP}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/${AZURE_IDENTITY}
+    ClientID: ${AZURE_IDENTITY_CLIENT_ID} 
 ---
 apiVersion: "aadpodidentity.k8s.io/v1"
 kind: AzureIdentityBinding
 metadata:
-    name: <binding-name> 
+    name: ${AZURE_IDENTITY}-binding 
 spec:
-    AzureIdentity: "<identity-name>"
-    Selector: "<selector-name>"
+    AzureIdentity: "${AZURE_IDENTITY}"
+    Selector: "node-label-operator"
 ---
 apiVersion: v1
 kind: Namespace
@@ -310,7 +310,6 @@ spec:
         - /manager
         args:
         - --enable-leader-election
-        # - --sync-period 10h
         image: shanalily/node-label 
         name: manager
         resources:
