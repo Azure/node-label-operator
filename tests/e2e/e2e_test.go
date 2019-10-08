@@ -948,7 +948,3 @@ func (s *TestSuite) DeleteLabelsWithPrefix(labelPrefix string) {
 		require.NoError(s.T(), err)
 	}
 }
-
-func WaitForReconcile() {
-	time.Sleep(20 * time.Second)
-}
