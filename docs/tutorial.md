@@ -25,7 +25,9 @@
 
     For deploying with RBAC-enabled:
 
-    `kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master/deploy/infra/deployment-rbac.yaml`
+    ```sh
+    kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master/deploy/infra/deployment-rbac.yaml
+    ```
 
     4. Create identity resources.
 
@@ -103,7 +105,7 @@ kubectl apply -f configmap.yaml
 
 5. Deploy controller
 
-```
+```sh
 make deploy
 ```
 
