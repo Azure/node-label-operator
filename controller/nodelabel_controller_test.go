@@ -11,13 +11,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/stretchr/testify/assert"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	ctrlfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
+
+	"github.com/Azure/go-autorest/autorest/to"
+	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
 )
 
 func TestCorrectTagsAppliedToNodes(t *testing.T) {
@@ -110,7 +112,7 @@ func TestCorrectTagsAppliedToNodes(t *testing.T) {
 
 	for _, tt := range armTagsTest {
 		t.Run(tt.name, func(t *testing.T) {
-			computeResource := NewFakeComputeResource(tt.tags)
+			computeResource := azrsrc.NewFakeComputeResource(tt.tags)
 			node := NewFakeNode(tt.name, tt.labels)
 
 			patch, err := r.applyTagsToNodes(defaultNamespacedName(tt.name), computeResource, node, &config)
@@ -196,7 +198,7 @@ func TestCorrectLabelsAppliedToAzureResources(t *testing.T) {
 	for _, tt := range nodeLabelsTest {
 		t.Run(tt.name, func(t *testing.T) {
 			node := NewFakeNode(tt.name, tt.labels)
-			computeResource := NewFakeComputeResource(tt.tags)
+			computeResource := azrsrc.NewFakeComputeResource(tt.tags)
 
 			tags, err := r.applyLabelsToAzureResource(defaultNamespacedName(tt.name), computeResource, node, &config)
 			if err != nil {

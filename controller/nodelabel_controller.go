@@ -26,6 +26,7 @@ import (
 
 	"github.com/Azure/go-autorest/autorest/to"
 	"github.com/Azure/node-label-operator/azure"
+	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
 )
 
 const (
@@ -102,13 +103,13 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	}
 
 	switch provider.ResourceType {
-	case VMSS:
+	case azrsrc.VMSS:
 		// Add VMSS tags to node
 		if err := r.reconcileVMSS(req.NamespacedName, &provider, &node, configOptions); err != nil {
 			log.Error(err, "failed to apply tags to nodes")
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
 		}
-	case VM:
+	case azrsrc.VM:
 		// Add VM tags to node
 		if err := r.reconcileVMs(req.NamespacedName, &provider, &node, configOptions); err != nil {
 			log.Error(err, "failed to apply tags to nodes")
@@ -129,7 +130,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 // pass VMSS -> tags info and assign to nodes on VMs (unless node already has label)
 func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, provider *azure.Resource,
 	node *corev1.Node, configOptions *ConfigOptions) error {
-	vmss, err := NewVMSS(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
+	vmss, err := azrsrc.NewVMSS(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
@@ -169,7 +170,7 @@ func (r *ReconcileNodeLabel) reconcileVMSS(namespacedName types.NamespacedName, 
 
 func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, provider *azure.Resource,
 	node *corev1.Node, configOptions *ConfigOptions) error {
-	vm, err := NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
+	vm, err := azrsrc.NewVM(r.ctx, provider.SubscriptionID, provider.ResourceGroup, provider.ResourceName)
 	if err != nil {
 		return err
 	}
@@ -205,7 +206,7 @@ func (r *ReconcileNodeLabel) reconcileVMs(namespacedName types.NamespacedName, p
 }
 
 // return patch with new labels, if any, otherwise return nil for no new labels or an error
-func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) ([]byte, error) {
+func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedName, computeResource azrsrc.ComputeResource, node *corev1.Node, configOptions *ConfigOptions) ([]byte, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	newLabels := map[string]*string{} // should allow for null JSON values
@@ -273,7 +274,7 @@ func (r *ReconcileNodeLabel) applyTagsToNodes(namespacedName types.NamespacedNam
 	return patch, nil
 }
 
-func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
+func (r *ReconcileNodeLabel) applyLabelsToAzureResource(namespacedName types.NamespacedName, computeResource azrsrc.ComputeResource, node *corev1.Node, configOptions *ConfigOptions) (map[string]*string, error) {
 	log := r.Log.WithValues("node-label-operator", namespacedName)
 
 	if len(computeResource.Tags()) >= maxNumTags {

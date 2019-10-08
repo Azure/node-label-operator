@@ -21,6 +21,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
 )
 
 func Test(t *testing.T) {
@@ -667,14 +669,14 @@ func (s *TestSuite) TestTooManyTags() {
 
 // Helper functions
 
-func (s *TestSuite) NewAzComputeResourceClient() controller.ComputeResource {
-	if s.ResourceType == controller.VMSS {
+func (s *TestSuite) NewAzComputeResourceClient() azrsrc.ComputeResource {
+	if s.ResourceType == azrsrc.VMSS {
 		return s.NewVMSS()
 	}
 	return s.NewVM()
 }
 
-func (s *TestSuite) NewVMSS() controller.VirtualMachineScaleSet {
+func (s *TestSuite) NewVMSS() azrsrc.VirtualMachineScaleSet {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
@@ -687,16 +689,16 @@ func (s *TestSuite) NewVMSS() controller.VirtualMachineScaleSet {
 	require.NoError(err)
 	assert.NotEqual(0, len(vmssList.Values()))
 	vmss := vmssList.Values()[0]
-	vmss = controller.VMSSUserAssignedIdentity(vmss)
+	vmss = azrsrc.VMSSUserAssignedIdentity(vmss)
 	s.T().Logf("Successfully found %d vmss: using %s", len(vmssList.Values()), *vmss.Name)
-	return *controller.NewVMSSInitialized(context.Background(), s.ResourceGroup, &vmssClient, &vmss)
+	return *azrsrc.NewVMSSInitialized(context.Background(), s.ResourceGroup, &vmssClient, &vmss)
 }
 
-func (s *TestSuite) NewVM() controller.VirtualMachine {
+func (s *TestSuite) NewVM() azrsrc.VirtualMachine {
 	assert := assert.New(s.T())
 	require := require.New(s.T())
 
-	assert.True(s.ResourceType == controller.VM)
+	assert.True(s.ResourceType == azrsrc.VM)
 	vmClient, err := azure.NewVMClient(s.SubscriptionID)
 	require.NoError(err)
 	vmList, err := vmClient.List(context.Background(), s.ResourceGroup)
@@ -706,9 +708,9 @@ func (s *TestSuite) NewVM() controller.VirtualMachine {
 	require.NoError(err)
 	assert.NotEqual(0, len(vmList.Values()))
 	vm := vmList.Values()[0]
-	vm = controller.VMUserAssignedIdentity(vm)
+	vm = azrsrc.VMUserAssignedIdentity(vm)
 	s.T().Logf("Successfully found %d vms: using %s", len(vmList.Values()), *vm.Name)
-	return *controller.NewVMInitialized(context.Background(), s.ResourceGroup, &vmClient, &vm)
+	return *azrsrc.NewVMInitialized(context.Background(), s.ResourceGroup, &vmClient, &vm)
 }
 
 func (s *TestSuite) GetConfigOptions() *controller.ConfigOptions {
@@ -759,7 +761,7 @@ func (s *TestSuite) GetNumLabelsPerNode(nodeList *corev1.NodeList) map[string]in
 	return numLabels
 }
 
-func (s *TestSuite) GetNodesOnAzComputeResource(computeResource controller.ComputeResource, nodeList *corev1.NodeList) []corev1.Node {
+func (s *TestSuite) GetNodesOnAzComputeResource(computeResource azrsrc.ComputeResource, nodeList *corev1.NodeList) []corev1.Node {
 	computeResourceNodes := []corev1.Node{}
 	for _, node := range nodeList.Items {
 		provider, err := azure.ParseProviderID(node.Spec.ProviderID)
@@ -776,7 +778,7 @@ func (s *TestSuite) GetNodesOnAzComputeResource(computeResource controller.Compu
 	return computeResourceNodes
 }
 
-func (s *TestSuite) UpdateTagsOnAzComputeResource(computeResource controller.ComputeResource, tags map[string]*string) controller.ComputeResource {
+func (s *TestSuite) UpdateTagsOnAzComputeResource(computeResource azrsrc.ComputeResource, tags map[string]*string) azrsrc.ComputeResource {
 	for tag, val := range tags {
 		computeResource.Tags()[tag] = val
 	}
@@ -853,7 +855,7 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 	return nil
 }
 
-func (s *TestSuite) CheckAzComputeResourceTagsForLabels(computeResource controller.ComputeResource, labels map[string]string, numStartingTags int) error {
+func (s *TestSuite) CheckAzComputeResourceTagsForLabels(computeResource azrsrc.ComputeResource, labels map[string]string, numStartingTags int) error {
 	s.T().Logf("Checking Azure compute resource for accurate labels")
 	if len(labels) != len(computeResource.Tags())-numStartingTags {
 		return fmt.Errorf("len(labels) != len(computeResource.Tags())-numStartingTags (%d != %d)", len(labels), len(computeResource.Tags())-numStartingTags)
@@ -877,7 +879,7 @@ func (s *TestSuite) CheckAzComputeResourceTagsForLabels(computeResource controll
 	return nil
 }
 
-func (s *TestSuite) CleanupAzComputeResource(computeResource controller.ComputeResource, tags map[string]*string, numStartingTags int) controller.ComputeResource {
+func (s *TestSuite) CleanupAzComputeResource(computeResource azrsrc.ComputeResource, tags map[string]*string, numStartingTags int) azrsrc.ComputeResource {
 	for key := range tags {
 		delete(computeResource.Tags(), key)
 	}
