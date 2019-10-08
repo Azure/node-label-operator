@@ -15,9 +15,9 @@ The purpose of this Kubernetes controller is to sync ARM VM/VMSS tags and node l
 
 ## Getting Started 
 
-1. Assume you already have a cluster.
+1. Create a cluster.
 
-You have created a cluster using either AKS or aks-engine.
+Create a cluster using either [AKS](https://docs.microsoft.com/en-us/azure/aks/kubernetes-walkthrough) or [aks-engine](https://github.com/Azure/aks-engine), if you don't already have one ready to go.
 
 2. Create a managed service identity if you don't have one. If you have an AKS cluster, then you will use the MC\_ resource group.
 
