@@ -50,7 +50,7 @@ export AZURE_CLIENT_SECRET=
 Set `KUBECONFIG_OUT` to the contents of your kubeconfig file. This was done to make testing with Github Actions simpler.
 
 ```sh
-export KUBECONFIG=$(<$KUBECONFIG)
+export KUBECONFIG_OUT=$(<$KUBECONFIG)
 ```
 
 Run `make e2e-test`.
