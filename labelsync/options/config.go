@@ -12,7 +12,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/Azure/node-label-operator/conversion"
+	"github.com/Azure/node-label-operator/labelsync/naming"
 )
 
 const (
@@ -64,8 +64,8 @@ func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
 
 	if configOptions.LabelPrefix == UNSET {
 		configOptions.LabelPrefix = DefaultLabelPrefix
-	} else if len(configOptions.LabelPrefix) > conversion.MaxLabelPrefixLen {
-		return nil, fmt.Errorf(fmt.Sprintf("label prefix is over %d characters", conversion.MaxLabelPrefixLen))
+	} else if len(configOptions.LabelPrefix) > naming.MaxLabelPrefixLen {
+		return nil, fmt.Errorf(fmt.Sprintf("label prefix is over %d characters", naming.MaxLabelPrefixLen))
 	}
 
 	// also validate prefix?

@@ -19,7 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/Azure/node-label-operator/azure"
-	"github.com/Azure/node-label-operator/conversion/options"
+	"github.com/Azure/node-label-operator/labelsync/options"
 )
 
 var Scheme = runtime.NewScheme()

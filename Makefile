@@ -16,7 +16,7 @@ all: manager
 
 # Run tests
 test: generate fmt vet
-	go test ./controller/... ./azure/... ./conversion/... -coverprofile cover.out
+	go test ./controller/... ./azure/... ./labelsync/... -coverprofile cover.out
 .PHONY: test
 
 # Build manager binary

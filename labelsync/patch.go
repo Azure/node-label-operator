@@ -1,9 +1,9 @@
-package controller
+package labelsync
 
 import (
 	"encoding/json"
 
-	"github.com/Azure/node-label-operator/conversion/options"
+	"github.com/Azure/node-label-operator/labelsync/options"
 )
 
 func LabelPatch(labels map[string]string) ([]byte, error) {
@@ -22,6 +22,6 @@ func LabelPatchWithDelete(labels map[string]*string) ([]byte, error) {
 	})
 }
 
-func labelDeletionAllowed(configOptions *options.ConfigOptions) bool {
+func LabelDeletionAllowed(configOptions *options.ConfigOptions) bool {
 	return configOptions.LabelPrefix != "" && (configOptions.ConflictPolicy == options.ARMPrecedence || configOptions.ConflictPolicy == options.Ignore)
 }

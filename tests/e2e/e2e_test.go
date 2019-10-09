@@ -22,9 +22,9 @@ import (
 
 	"github.com/Azure/node-label-operator/azure"
 	azrsrc "github.com/Azure/node-label-operator/azure/computeresource"
-	"github.com/Azure/node-label-operator/controller"
-	"github.com/Azure/node-label-operator/conversion"
-	"github.com/Azure/node-label-operator/conversion/options"
+	"github.com/Azure/node-label-operator/labelsync"
+	"github.com/Azure/node-label-operator/labelsync/naming"
+	"github.com/Azure/node-label-operator/labelsync/options"
 )
 
 func Test(t *testing.T) {
@@ -180,7 +180,7 @@ func (s *TestSuite) TestTwoWaySync() {
 	for _, node := range computeResourceNodes {
 		// needs to be key without prefix
 		for key := range node.Labels {
-			_, ok := tags[conversion.LabelWithoutPrefix(key, options.DefaultLabelPrefix)]
+			_, ok := tags[naming.LabelWithoutPrefix(key, options.DefaultLabelPrefix)]
 			assert.False(ok)
 		}
 	}
@@ -533,7 +533,7 @@ func (s *TestSuite) TestARMTagToNodeLabel_CustomLabelPrefix() {
 			return false
 		}
 		for key := range tags {
-			validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
+			validLabelName := naming.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
 			for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
 				_, ok := node.Labels[validLabelName]
 				if ok { // check that tag was deleted
@@ -614,7 +614,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 				newLabels[key] = nil
 			}
 		}
-		patch, err := controller.LabelPatchWithDelete(newLabels)
+		patch, err := labelsync.LabelPatchWithDelete(newLabels)
 		require.NoError(err)
 		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
 		require.NoError(err)
@@ -625,7 +625,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 	require.NoError(err)
 	for key := range tags {
 		// validLabelName should be same as key
-		validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
+		validLabelName := naming.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
 		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
 			_, ok := node.Labels[validLabelName]
 			assert.False(ok) // check that tag was deleted
@@ -648,7 +648,7 @@ func (s *TestSuite) TestEmptyLabelPrefix() {
 				newLabels[key] = nil
 			}
 		}
-		patch, err := controller.LabelPatchWithDelete(newLabels)
+		patch, err := labelsync.LabelPatchWithDelete(newLabels)
 		require.NoError(err)
 		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
 		require.NoError(err)
@@ -836,7 +836,7 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 			return fmt.Errorf("len(tags) != len(updatedNode.Labels)-numStartingLabels[updatedNode.Name] (%d != %d)", len(tags), len(updatedNode.Labels)-numStartingLabels[updatedNode.Name])
 		}
 		for key, val := range tags {
-			validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix) // make sure this is config options I use
+			validLabelName := naming.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix) // make sure this is config options I use
 			result, ok := updatedNode.Labels[validLabelName]
 			// assert.True(s.T(), ok)
 			if !ok {
@@ -912,7 +912,7 @@ func (s *TestSuite) CheckTagLabelsDeletedFromNodes(tags map[string]*string, conf
 	}
 	numErrs := 0
 	for key := range tags {
-		validLabelName := conversion.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
+		validLabelName := naming.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix)
 		for _, node := range nodeList.Items { // also checking none of nodes on other compute resource were affected
 			_, ok := node.Labels[validLabelName]
 			if ok {
@@ -941,12 +941,12 @@ func (s *TestSuite) DeleteLabelsWithPrefix(labelPrefix string) {
 	for _, node := range nodeList.Items {
 		newLabels := map[string]*string{}
 		for key := range node.Labels {
-			if conversion.HasLabelPrefix(key, labelPrefix) {
+			if naming.HasLabelPrefix(key, labelPrefix) {
 				delete(node.Labels, key)
 				newLabels[key] = nil
 			}
 		}
-		patch, err := controller.LabelPatchWithDelete(newLabels)
+		patch, err := labelsync.LabelPatchWithDelete(newLabels)
 		require.NoError(s.T(), err)
 		err = s.client.Patch(context.Background(), &node, client.ConstantPatch(types.MergePatchType, patch))
 		require.NoError(s.T(), err)
