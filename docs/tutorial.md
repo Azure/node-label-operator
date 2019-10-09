@@ -54,7 +54,7 @@
         name: <binding-name> 
     spec:
         AzureIdentity: "<identity-name>"
-        Selector: "<selector-name>"
+        Selector: "node-label-operator"
     ```
 
     ```sh
