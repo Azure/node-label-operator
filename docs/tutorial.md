@@ -115,9 +115,11 @@ The options for the ConfigMap are described below.
 
 5. Deploy controller
 
+Login in to Docker (`docker login`).
+
 ```sh
-export IMG=shanalily/node-label
-sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
+export IMG=<dockerhub-username>/node-label
+make docker-build docker-push
 make deploy
 ```
 
