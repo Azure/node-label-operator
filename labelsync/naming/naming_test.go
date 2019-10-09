@@ -1,4 +1,4 @@
-package controller
+package naming
 
 import (
 	"fmt"
@@ -33,11 +33,10 @@ Made by the joiner squirrel or old grub,
 Time out o' mind the fairies' coachmakers. `, false},
 	}
 
-	config := DefaultConfigOptions()
-
+	labelPrefix := "azure.tags"
 	for _, tt := range tagNameTests {
 		t.Run(tt.given, func(t *testing.T) {
-			valid := ValidTagName(tt.given, config)
+			valid := ValidTagName(tt.given, labelPrefix)
 			if valid != tt.expected {
 				t.Errorf("given tag name %q, got valid=%t, want valid=%t", tt.given, valid, tt.expected)
 			}
@@ -111,23 +110,22 @@ func TestValidLabelVal(t *testing.T) {
 }
 
 func TestConvertTagNameToValidLabelName(t *testing.T) {
+	labelPrefix := "azure.tags"
+
 	var tagNameConversionTests = []struct {
 		given    string
 		prefix   string
 		expected string
 	}{
-		{"env", DefaultLabelPrefix, fmt.Sprintf("%s/env", DefaultLabelPrefix)},
-		{"dept", DefaultLabelPrefix, fmt.Sprintf("%s/dept", DefaultLabelPrefix)},
-		{"Good_night_good_night._parting_is_such_sweet_sorrow._That_I_shall_say_good_night_till_it_be_morrow", DefaultLabelPrefix, fmt.Sprintf("%s/Good_night_good_night._parting_is_such_sweet_sorrow._That_I_sha", DefaultLabelPrefix)},
+		{"env", labelPrefix, fmt.Sprintf("%s/env", labelPrefix)},
+		{"dept", labelPrefix, fmt.Sprintf("%s/dept", labelPrefix)},
+		{"Good_night_good_night._parting_is_such_sweet_sorrow._That_I_shall_say_good_night_till_it_be_morrow", labelPrefix, fmt.Sprintf("%s/Good_night_good_night._parting_is_such_sweet_sorrow._That_I_sha", labelPrefix)},
 		{"agentpool", "", "agentpool"},
 	}
 
-	config := DefaultConfigOptions()
-
 	for _, tt := range tagNameConversionTests {
 		t.Run(tt.given, func(t *testing.T) {
-			config.LabelPrefix = tt.prefix
-			validLabelName := ConvertTagNameToValidLabelName(tt.given, config)
+			validLabelName := ConvertTagNameToValidLabelName(tt.given, tt.prefix)
 			if validLabelName != tt.expected {
 				t.Errorf("given tag name %q, got label name %q, expected label name %q", tt.given, validLabelName, tt.expected)
 			}
@@ -140,15 +138,14 @@ func TestConvertLabelNameToValidTagName(t *testing.T) {
 		given    string
 		expected string
 	}{
-		{"favfruit", "favfruit"},                                 // have prefix?
-		{fmt.Sprintf("%s/favveg", DefaultLabelPrefix), "favveg"}, // have prefix?
+		{"favfruit", "favfruit"},        // have prefix?
+		{"azure.tags/favveg", "favveg"}, // have prefix?
 	}
 
-	config := DefaultConfigOptions()
-
+	labelPrefix := "azure.tags"
 	for _, tt := range labelNameConversionTests {
 		t.Run(tt.given, func(t *testing.T) {
-			validTagName := ConvertLabelNameToValidTagName(tt.given, config)
+			validTagName := ConvertLabelNameToValidTagName(tt.given, labelPrefix)
 			if validTagName != tt.expected {
 				t.Errorf("given label name %q, got tag name %q, expected tag name %q", tt.given, validTagName, tt.expected)
 			}
