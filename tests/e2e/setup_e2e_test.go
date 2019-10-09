@@ -58,10 +58,10 @@ func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
 
 func (s *TestSuite) setConfigOptions(minSyncPeriod string) {
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := options.OptionsConfigMapNamespacedName()
+	optionsNamespacedName := options.ConfigMapNamespacedName()
 	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
 	require.NoError(s.T(), err)
-	configOptions, err := options.NewConfigOptions(configMap)
+	configOptions, err := options.NewConfig(configMap)
 	require.NoError(s.T(), err)
 	configOptions.SyncDirection = options.ARMToNode
 	configOptions.ConflictPolicy = options.ARMPrecedence

@@ -26,9 +26,9 @@ func TestDefaultConfigOptions(t *testing.T) {
 
 }
 
-func TestNewConfigOptions(t *testing.T) {
+func TestNewConfig(t *testing.T) {
 	configMap := NewFakeConfigMap()
-	configOptions, err := NewConfigOptions(*configMap)
+	configOptions, err := NewConfig(*configMap)
 	if err != nil {
 		t.Errorf("failed to load new config options from map: %q", err)
 	}
@@ -39,7 +39,7 @@ func TestNewConfigOptions(t *testing.T) {
 }
 
 func TestGetConfigMapFromConfigOptions(t *testing.T) {
-	namespacecedName := OptionsConfigMapNamespacedName()
+	namespacecedName := ConfigMapNamespacedName()
 	var configMapTests = []struct {
 		configName string
 		given      ConfigOptions
@@ -82,10 +82,10 @@ func TestGetConfigMapFromConfigOptions(t *testing.T) {
 	}
 }
 
-func TestNewDefaultConfigOptions(t *testing.T) {
+func TestNewDefaultConfig(t *testing.T) {
 	configOptions := DefaultConfigOptions()
-	namespacecedName := OptionsConfigMapNamespacedName()
-	configMap, err := NewDefaultConfigOptions()
+	namespacecedName := ConfigMapNamespacedName()
+	configMap, err := NewDefaultConfig()
 	if err != nil {
 		t.Errorf("failed to load config map from config options: %q", err)
 	}

@@ -240,7 +240,7 @@ func TestLabelDeletionAllowed(t *testing.T) {
 
 	for _, tt := range labelDeletionAllowedTest {
 		t.Run(tt.name, func(t *testing.T) {
-			actual := LabelDeletionAllowed(tt.configOptions)
+			actual := labelDeletionAllowed(tt.configOptions)
 			assert.Equal(t, tt.expected, actual)
 		})
 	}

@@ -52,11 +52,11 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 	log := r.Log.WithValues("node-label-operator", req.NamespacedName)
 
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := options.OptionsConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
+	optionsNamespacedName := options.ConfigMapNamespacedName() // assuming "node-label-operator" and "node-label-operator-system", is this okay
 	if err := r.Get(r.ctx, optionsNamespacedName, &configMap); err != nil {
 		log.V(1).Info("unable to fetch ConfigMap, instead using default configuration settings")
 		// create default options config map and requeue
-		configMap, err := options.NewDefaultConfigOptions()
+		configMap, err := options.NewDefaultConfig()
 		if err != nil {
 			log.Error(err, "failed to get new default options configmap")
 			return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
@@ -67,7 +67,7 @@ func (r *ReconcileNodeLabel) Reconcile(req reconcile.Request) (reconcile.Result,
 		}
 		return ctrl.Result{RequeueAfter: time.Minute}, nil
 	}
-	configOptions, err := options.NewConfigOptions(configMap)
+	configOptions, err := options.NewConfig(configMap)
 	if err != nil {
 		log.Error(err, "failed to load options from config file")
 		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil

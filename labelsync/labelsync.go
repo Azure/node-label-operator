@@ -57,7 +57,7 @@ func TagsToNodes(namespacedName types.NamespacedName, computeResource azrsrc.Com
 
 	// delete labels if tag has been deleted
 	// if conflict policy is node precedence (which it will most likely not be), then don't delete tags if they exist on node
-	if LabelDeletionAllowed(configOptions) {
+	if labelDeletionAllowed(configOptions) {
 		for labelFullName, labelVal := range node.Labels {
 			if naming.HasLabelPrefix(labelFullName, configOptions.LabelPrefix) {
 				// check if exists on vm/vmss

@@ -717,10 +717,10 @@ func (s *TestSuite) NewVM() azrsrc.VirtualMachine {
 
 func (s *TestSuite) GetConfigOptions() *options.ConfigOptions {
 	var configMap corev1.ConfigMap
-	optionsNamespacedName := options.OptionsConfigMapNamespacedName()
+	optionsNamespacedName := options.ConfigMapNamespacedName()
 	err := s.client.Get(context.Background(), optionsNamespacedName, &configMap)
 	require.NoError(s.T(), err)
-	configOptions, err := options.NewConfigOptions(configMap)
+	configOptions, err := options.NewConfig(configMap)
 	require.NoError(s.T(), err)
 
 	return configOptions
