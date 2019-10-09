@@ -64,7 +64,7 @@
 
     An AzureAssignedIdentity will be created for each controller pod.
 
-3. Create config map
+3. Create ConfigMap
 
 Set up the Kubernetes ConfigMap, if not using default settings. It must be named 'node-label-operator' and have namespace 'node-label-operator-system' to allow to controller to
 watch it in addition to nodes. If you don't, default settings will be used. You won't be able to create the configmap
@@ -99,7 +99,7 @@ Finally, run:
 kubectl apply -f configmap.yaml
 ```
 
-The options for the config map are described below.
+The options for the ConfigMap are described below.
 
 | setting | description | default |
 | ------- | ----------- | ------- |
@@ -116,6 +116,8 @@ The options for the config map are described below.
 5. Deploy controller
 
 ```sh
+export IMG=shanalily/node-label
+sed -i'' -e 's@image: .*@image: '"${IMG}"'@' ./config/default/manager_image_patch.yaml
 make deploy
 ```
 

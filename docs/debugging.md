@@ -13,9 +13,9 @@ kubectl logs node-label-operator-controller-manager-##########-##### --namespace
 ```
 There are two pods so check both if the first one does not seem to have helpful output.
 
-### Options config map
+### Options ConfigMap
 
-The configmap needs to be in the right namespace (node-label-operator-system) and named correctly (node-label-operator).
+The ConfigMap needs to be in the right namespace (node-label-operator-system) and named correctly (node-label-operator).
 
 Do not set minSyncPeriod to too short a period since that may cause throttling. Kubernetes node resources emit many events so operator reconciliation can happen too often and make too many requests to Azure resources. You can always change the minSyncPeriod by editing the config map associated with the controller (`kubectl edit cm node-label-operator --namespace=node-label-operator`).
 
