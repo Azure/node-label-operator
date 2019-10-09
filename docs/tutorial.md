@@ -66,7 +66,7 @@
 
 3. Create config map
 
-Set up the Kubernetes ConfigMap. It must be named 'node-label-operator' and have namespace 'node-label-operator-system' to allow to controller to
+Set up the Kubernetes ConfigMap, if not using default settings. It must be named 'node-label-operator' and have namespace 'node-label-operator-system' to allow to controller to
 watch it in addition to nodes. If you don't, default settings will be used. You won't be able to create the configmap
 until the namespace has been created.
 
@@ -87,9 +87,19 @@ data:
     minSyncPeriod: "1m"
 ```
 
+You will first need to create the `node-label-operator-system` namespace, which is otherwise created when deploying the controller manager. To do so, run:
+
+```sh
+kubectl apply -f config/samples/namespace.yaml
+```
+
+Finally, run:
+
 ```sh
 kubectl apply -f configmap.yaml
 ```
+
+The options for the config map are described below.
 
 | setting | description | default |
 | ------- | ----------- | ------- |
