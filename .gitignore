@@ -13,6 +13,7 @@
 *.out
 
 bin/
+dist/
 private/
 
 **/_output
