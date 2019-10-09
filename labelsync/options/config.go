@@ -48,7 +48,7 @@ type ConfigOptions struct {
 	MinSyncPeriod       string         `json:"minSyncPeriod"`
 }
 
-func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
+func NewConfig(configMap corev1.ConfigMap) (*ConfigOptions, error) {
 	configOptions, err := LoadConfigOptionsFromConfigMap(configMap)
 	if err != nil {
 		return nil, err
@@ -94,7 +94,7 @@ func NewConfigOptions(configMap corev1.ConfigMap) (*ConfigOptions, error) {
 	return &configOptions, nil
 }
 
-func NewDefaultConfigOptions() (*corev1.ConfigMap, error) {
+func NewDefaultConfig() (*corev1.ConfigMap, error) {
 	configOptions := DefaultConfigOptions()
 	configMap, err := GetConfigMapFromConfigOptions(&configOptions)
 	if err != nil {
@@ -140,13 +140,13 @@ func GetConfigMapFromConfigOptions(configOptions *ConfigOptions) (corev1.ConfigM
 	if err := json.Unmarshal(b, &configMap.Data); err != nil {
 		return corev1.ConfigMap{}, nil
 	}
-	namespacedName := OptionsConfigMapNamespacedName()
+	namespacedName := ConfigMapNamespacedName()
 	configMap.Name = namespacedName.Name
 	configMap.Namespace = namespacedName.Namespace
 
 	return configMap, nil
 }
 
-func OptionsConfigMapNamespacedName() types.NamespacedName {
+func ConfigMapNamespacedName() types.NamespacedName {
 	return types.NamespacedName{Name: "node-label-operator", Namespace: "node-label-operator-system"}
 }

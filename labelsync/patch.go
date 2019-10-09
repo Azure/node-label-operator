@@ -22,6 +22,6 @@ func LabelPatchWithDelete(labels map[string]*string) ([]byte, error) {
 	})
 }
 
-func LabelDeletionAllowed(configOptions *options.ConfigOptions) bool {
+func labelDeletionAllowed(configOptions *options.ConfigOptions) bool {
 	return configOptions.LabelPrefix != "" && (configOptions.ConflictPolicy == options.ARMPrecedence || configOptions.ConflictPolicy == options.Ignore)
 }
