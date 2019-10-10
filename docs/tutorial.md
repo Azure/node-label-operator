@@ -115,7 +115,7 @@ The options for the ConfigMap are described below.
 
 5. Deploy controller
 
-Login in to Docker (`docker login`).
+Log in to Docker (`docker login`) so you can push your image of this project to a Docker registry ([create a Dockerhub account](https://hub.docker.com) if you don't have one).
 
 ```sh
 export IMG=<dockerhub-username>/node-label
