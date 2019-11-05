@@ -66,7 +66,6 @@ func (s *TestSuite) setConfigOptions(minSyncPeriod string) {
 	configOptions.SyncDirection = options.ARMToNode
 	configOptions.ConflictPolicy = options.ARMPrecedence
 	configOptions.MinSyncPeriod = minSyncPeriod
-	configOptions.ResourceGroupFilter = options.DefaultResourceGroupFilter
 	configMap, err = options.GetConfigMapFromConfigOptions(configOptions)
 	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
