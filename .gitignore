@@ -20,7 +20,4 @@ private/
 **/translations
 creds.json
 identity.json
-tests/aks-engine/aadpodidentity.yaml
-tests/aks-engine/aadpodidentitybinding.yaml
-tests/aks/aadpodidentity.yaml
-tests/aks/aadpodidentitybinding.yaml
+aadpodidentity-config.yaml
