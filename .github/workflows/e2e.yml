@@ -40,7 +40,7 @@ jobs:
 
     # - name: Redeploy AKS-Engine Controller
     #   env:
-    #     KUBECONFIG: $GITHUB_WORKSPACE/akse_kubeconfig
+    #     KUBECONFIG: ${HOME}/akse_kubeconfig
     #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
     #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
     #     IMG: ${{ secrets.DOCKER_USERNAME }}/e2e-node-label
@@ -62,7 +62,7 @@ jobs:
 
     # - name: Redeploy AKS Controller
     #   env:
-    #     KUBECONFIG: $GITHUB_WORKSPACE/aks_kubeconfig
+    #     KUBECONFIG: ${HOME}/aks_kubeconfig
     #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
     #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
     #     IMG: ${{ secrets.DOCKER_USERNAME }}/e2e-node-label
@@ -73,7 +73,7 @@ jobs:
     - name: AKS E2E Tests
       env:
         KUBECONFIG_OUT: ${{ secrets.AKS_KUBECONFIG }}
-        KUBECONFIG: $GITHUB_WORKSPACE/kubeconfig
+        KUBECONFIG: ${HOME}/kubeconfig
         AZURE_SUBSCRIPTION_ID: ${{ secrets.E2E_SUBSCRIPTION_ID }}
         AZURE_TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
