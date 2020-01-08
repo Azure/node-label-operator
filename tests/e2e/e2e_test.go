@@ -15,7 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,9 +28,8 @@ import (
 
 func Test(t *testing.T) {
 	c := &Cluster{}
-	c.KubeConfig = os.Getenv("KUBECONFIG_OUT")
-	var config map[string]interface{}
-	err := yaml.Unmarshal([]byte(c.KubeConfig), &config)
+	c.KubeConfigPath = os.Getenv("KUBECONFIG")
+	_, err := os.Open(c.KubeConfigPath)
 	require.NoError(t, err)
 	suite.Run(t, &TestSuite{Cluster: c})
 }
@@ -838,13 +836,11 @@ func (s *TestSuite) CheckNodeLabelsForTags(nodes []corev1.Node, tags map[string]
 		for key, val := range tags {
 			validLabelName := naming.ConvertTagNameToValidLabelName(key, configOptions.LabelPrefix) // make sure this is config options I use
 			result, ok := updatedNode.Labels[validLabelName]
-			// assert.True(s.T(), ok)
 			if !ok {
 				s.T().Logf("expected node %s to have label %s", updatedNode.Name, validLabelName)
 				numErrs += 1
 				continue
 			}
-			// assert.Equal(s.T(), *val, result)
 			if *val != result {
 				s.T().Logf("expected node %s to have key/value pair %s=%s", updatedNode.Name, validLabelName, *val)
 				numErrs += 1
