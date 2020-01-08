@@ -1,3 +1,4 @@
+
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 E2E_SUBSCRIPTION ?= "Azure Container Service - Development"
@@ -48,20 +49,13 @@ vet:
 	go vet ./...
 .PHONY: vet
 
-# Run GolangCI-Lint against code
 lint:
 	golangci-lint run -j 2 $(EXTRA_ARGS)
 .PHONY: lint
 
-# Run end-to-end tests
 e2e-test:
 	go test ./tests/e2e/... -timeout 0 -v -run Test/TestARMTagToNodeLabel
-.PHONY: e2e-test
-
-# Redeploy controller in the configured Kubernetes cluster for end-to-end tests
-e2e-redeploy:
-	./tests/scripts/redeploy.sh
-.PHONY: e2e-redeploy
+.PHONY: e2e-run-tests
 
 # Generate code
 generate: controller-gen

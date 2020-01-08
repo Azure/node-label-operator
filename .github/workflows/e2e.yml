@@ -35,48 +35,24 @@ jobs:
     - name: Check out code into the Go module directory
       uses: actions/checkout@v1
 
-    - name: Setup Cluster
-      run: |
-        cat ${{ secrets.AKSE_KUBECONFIG }} > $GITHUB_WORKSPACE/akse_kubeconfig
-        cat ${{ secrets.AKS_KUBECONFIG }} > $GITHUB_WORKSPACE/aks_kubeconfig
-
     - name: Build Controller
       run: make
-
-    # - name: Redeploy AKS-Engine Controller
-    #   env:
-    #     KUBECONFIG: $GITHUB_WORKSPACE/akse_kubeconfig
-    #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-    #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-    #     IMG: ${{ secrets.DOCKER_USERNAME }}/e2e-node-label
-    #   run: |
-    #     docker login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD
-    #     make e2e-redeploy
       
     - name: AKS-Engine E2E Tests
       env:
-        KUBECONFIG: $GITHUB_WORKSPACE/akse_kubeconfig
+        KUBECONFIG_OUT: ${{ secrets.AKSE_KUBECONFIG }}
         AZURE_SUBSCRIPTION_ID: ${{ secrets.E2E_SUBSCRIPTION_ID }}
         AZURE_TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
       run: make e2e-test
-
-    # - name: Redeploy AKS Controller
-    #   env:
-    #     KUBECONFIG: $GITHUB_WORKSPACE/aks_kubeconfig
-    #     DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-    #     DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
-    #     IMG: ${{ secrets.DOCKER_USERNAME }}/e2e-node-label
-    #   run: |
-    #     docker login --username $DOCKER_USERNAME --password $DOCKER_PASSWORD
-    #     make e2e-redeploy
 
     - name: AKS E2E Tests
       env:
-        KUBECONFIG: $GITHUB_WORKSPACE/aks_kubeconfig
+        KUBECONFIG_OUT: ${{ secrets.AKS_KUBECONFIG }}
         AZURE_SUBSCRIPTION_ID: ${{ secrets.E2E_SUBSCRIPTION_ID }}
         AZURE_TENANT_ID: ${{ secrets.E2E_TENANT_ID }}
         AZURE_CLIENT_ID: ${{ secrets.E2E_CLIENT_ID }}
         AZURE_CLIENT_SECRET: ${{ secrets.E2E_CLIENT_SECRET }}
       run: make e2e-test
+
