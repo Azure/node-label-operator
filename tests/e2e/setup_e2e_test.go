@@ -30,7 +30,7 @@ func AddToScheme(scheme *runtime.Scheme) {
 }
 
 type Cluster struct {
-	KubeConfigPath string
+	KubeConfig     string
 	SubscriptionID string
 	ResourceGroup  string
 	ResourceType   string
@@ -44,18 +44,16 @@ type TestSuite struct {
 }
 
 func initialize(c *Cluster) error {
-	if c.KubeConfigPath == "" {
-		return errors.New("missing parameters: KubeConfigPath must be set")
+	if c.KubeConfig == "" {
+		return errors.New("missing parameters: KubeConfig must be set")
 	}
 	return nil
 }
 
-func loadConfigOrFail(t *testing.T, kubeconfig string) (c *rest.Config) {
-	c, err := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-		&clientcmd.ConfigOverrides{}).ClientConfig()
+func loadConfigFromBytes(t *testing.T, kubeconfig_out string) *rest.Config {
+	c, err := clientcmd.RESTConfigFromKubeConfig([]byte(kubeconfig_out))
 	require.NoError(t, err)
-	return
+	return c
 }
 
 func (s *TestSuite) setConfigOptions(minSyncPeriod string) {
@@ -68,7 +66,6 @@ func (s *TestSuite) setConfigOptions(minSyncPeriod string) {
 	configOptions.SyncDirection = options.ARMToNode
 	configOptions.ConflictPolicy = options.ARMPrecedence
 	configOptions.MinSyncPeriod = minSyncPeriod
-	configOptions.ResourceGroupFilter = options.DefaultResourceGroupFilter
 	configMap, err = options.GetConfigMapFromConfigOptions(configOptions)
 	require.NoError(s.T(), err)
 	err = s.client.Update(context.Background(), &configMap)
@@ -80,7 +77,7 @@ func (s *TestSuite) SetupSuite() {
 	err := initialize(s.Cluster)
 	require.Nil(s.T(), err)
 	AddToScheme(Scheme)
-	cl, err := client.New(loadConfigOrFail(s.T(), s.KubeConfigPath), client.Options{Scheme: Scheme})
+	cl, err := client.New(loadConfigFromBytes(s.T(), s.KubeConfig), client.Options{Scheme: Scheme})
 	require.NoError(s.T(), err)
 	s.client = cl
 
