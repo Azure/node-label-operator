@@ -11,8 +11,8 @@ set -o pipefail
 
 export AKS_ENGINE_NAME=node-label-test-akse
 export AKS_ENGINE_RG=${AKS_ENGINE_NAME}-rg
-export AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
-export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
+export AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/${AKS_ENGINE_NAME}-creds.json
+export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/${AKS_ENGINE_NAME}-identity.json
 
 az group create --name $AKS_ENGINE_RG --location westus2 
 
@@ -23,10 +23,11 @@ else
     echo "Creating Contributor role for resource group ${AKS_ENGINE_RG} failed"
 fi
 
+# deploy aks-engine cluster
+
 export AKS_ENGINE_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
 export AKS_ENGINE_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
 
-# deploy aks-engine cluster
 if [ -d "${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster" ]; then
     rm -rf ${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster
 fi
@@ -44,6 +45,7 @@ aks-engine deploy --subscription-id $E2E_SUBSCRIPTION_ID \
 export KUBECONFIG="${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster/kubeconfig/kubeconfig.westus2.json"
 
 # create MSI
+
 az identity create -g $AKS_ENGINE_RG -n ${AKS_ENGINE_NAME}-identity -o json > $AZURE_IDENTITY_LOCATION
 if [ $? -eq 0 ]; then
     echo "Created identity for resource group ${AKS_ENGINE_RG}, stored in ${AZURE_IDENTITY_LOCATION}"
@@ -59,15 +61,38 @@ export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
 az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID 
 az role assignment create --role "Contributor" --assignee $PRINCIPAL_ID --scope /subscriptions/${E2E_SUBSCRIPTION_ID}/resourceGroups/${AKS_ENGINE_RG}
 
-# wait for roles to be created - improve this
-sleep 2m
+# create aadpodidentity.yaml in order to create AzureIdentity
+sed 's/<subid>/'"${E2E_SUBSCRIPTION_ID}"'/g' samples/aadpodidentity.yaml | \
+    sed 's/<resource-group>/'"${AKS_ENGINE_RG}"'/g' | \
+    sed 's/<a-idname>/'"${AKS_ENGINE_NAME}"'-identity/g' | \
+    sed 's/<name>/'"${AKS_ENGINE_NAME}"'-identity/g' | \
+    sed 's/<clientId>/'"${CLIENT_ID}"'/g' \
+    > tests/aks-engine/aadpodidentity.yaml
+if [ $? -eq 0 ]; then
+    echo "Generated aadpodidentity.yaml file"
+else
+    echo "Failed to generate aadpodidentity.yaml file"
+fi
 
-# create aad-pod-identity resources, including AzureIdentity and AzureIdentityBinding
+
+# create aadpodidentitybinding.yaml in order to create AzureIdentityBinding
+sed 's/<binding-name>/'"${AKS_ENGINE_NAME}"'-identity-binding/g' samples/aadpodidentitybinding.yaml | \
+    sed 's/<identity-name>/'"${AKS_ENGINE_NAME}"'-identity/g' | \
+    sed 's/<selector-name>/node-label-operator/g' \
+    > tests/aks-engine/aadpodidentitybinding.yaml
+if [ $? -eq 0 ]; then
+    echo "Generated aadpodidentitybinding.yaml file"
+else
+    echo "Failed to generate aadpodidentitybinding.yaml file"
+fi
+
+# apply aad pod identity stuff 
 kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master/deploy/infra/deployment-rbac.yaml
-cat tests/aks-engine/aadpodidentity-config.yaml | envsubst | kubectl apply -f -
+kubectl apply -f tests/aks-engine/aadpodidentity.yaml
+kubectl apply -f tests/aks-engine/aadpodidentitybinding.yaml
 
 # deploy controller 
-export IMG="$DOCKERHUB_USER/node-label" # change to your dockerhub username
+export IMG="shanalily/node-label" # change to your dockerhub username
 make docker-build docker-push
 make deploy
-kubectl apply -f config/samples/configmap.yaml
+kubectl apply -f samples/configmap.yaml
