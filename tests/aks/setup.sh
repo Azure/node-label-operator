@@ -12,8 +12,9 @@ export AKS_NAME=node-label-test-aks
 export AKS_RESOURCE_GROUP=${AKS_NAME}-rg
 export MC_RESOURCE_GROUP=MC_${AKS_RESOURCE_GROUP}_${AKS_NAME}-cluster_westus2
 
-export AZURE_AUTH_LOCATION=${PWD}/tests/aks/creds.json
-export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/identity.json
+# mkdir ~/aks 
+export AZURE_AUTH_LOCATION=${PWD}/tests/aks/${AKS_NAME}-creds.json
+export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks/${AKS_NAME}-identity.json
 
 az ad sp create-for-rbac --skip-assignment > $AZURE_AUTH_LOCATION
 
@@ -50,15 +51,37 @@ export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
 az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID
 az role assignment create --role "Contributor" --assignee $PRINCIPAL_ID --scope /subscriptions/${E2E_SUBSCRIPTION_ID}/resourceGroups/${MC_RESOURCE_GROUP}
 
-# wait for roles to be created - improve this
-sleep 2m
+# create aadpodidentity.yaml in order to create AzureIdentity
+sed 's/<subid>/'"${E2E_SUBSCRIPTION_ID}"'/g' samples/aadpodidentity.yaml | \
+    sed 's/<resource-group>/'"${MC_RESOURCE_GROUP}"'/g' | \
+    sed 's/<a-idname>/'"${AKS_NAME}"'-identity/g' | \
+    sed 's/<name>/'"${AKS_NAME}"'-identity/g' | \
+    sed 's/<clientId>/'"${CLIENT_ID}"'/g' \
+    > tests/aks/aadpodidentity.yaml
+if [ $? -eq 0 ]; then
+    echo "Generated aadpodidentity.yaml file"
+else
+    echo "Failed to generate aadpodidentity.yaml file"
+fi
 
-# create aad-pod-identity resources, including AzureIdentity and AzureIdentityBinding 
+# create aadpodidentitybinding.yaml in order to create AzureIdentityBinding
+sed 's/<binding-name>/'"${AKS_NAME}"'-identity-binding/g' samples/aadpodidentitybinding.yaml | \
+    sed 's/<identity-name>/'"${AKS_NAME}"'-identity/g' | \
+    sed 's/<selector-name>/node-label-operator/g' \
+    > tests/aks/aadpodidentitybinding.yaml
+if [ $? -eq 0 ]; then
+    echo "Generated aadpodidentitybinding.yaml file"
+else
+    echo "Failed to generate aadpodidentitybinding.yaml file"
+fi
+
+# apply aad pod identity stuff 
 kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master/deploy/infra/deployment-rbac.yaml
-cat tests/aks/aadpodidentity-config.yaml | envsubst | kubectl apply -f -
+kubectl apply -f tests/aks/aadpodidentity.yaml
+kubectl apply -f tests/aks/aadpodidentitybinding.yaml
 
 # deploy controller 
 export IMG="$DOCKERHUB_USER/node-label" # change to your dockerhub username
 make docker-build docker-push
 make deploy
-kubectl apply -f config/samples/configmap.yaml
+kubectl apply -f samples/configmap.yaml
