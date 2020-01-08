@@ -9,12 +9,12 @@
 set -e
 set -o pipefail
 
-export AKS_ENGINE_NAME=node-label-test-akse
-export AKS_ENGINE_RG=${AKS_ENGINE_NAME}-rg
-export AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
-export AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
+AKS_ENGINE_NAME=node-label-test-akse
+AKS_ENGINE_RG=${AKS_ENGINE_NAME}-rg
+AZURE_AUTH_LOCATION=${PWD}/tests/aks-engine/creds.json
+AZURE_IDENTITY_LOCATION=${PWD}/tests/aks-engine/identity.json
 
-az group create --name $AKS_ENGINE_RG --location westus2 
+az group create --name $AKS_ENGINE_RG --location westus2 --subscription $E2E_SUBSCRIPTION_ID 
 
 az ad sp create-for-rbac --role="Contributor" --scopes="/subscriptions/${E2E_SUBSCRIPTION_ID}/resourceGroups/${AKS_ENGINE_RG}" > $AZURE_AUTH_LOCATION
 if [ $? -eq 0 ]; then
@@ -23,37 +23,39 @@ else
     echo "Creating Contributor role for resource group ${AKS_ENGINE_RG} failed"
 fi
 
-export AKS_ENGINE_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
-export AKS_ENGINE_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
+AKS_ENGINE_CLIENT_ID=$(cat ${AZURE_AUTH_LOCATION} | jq -r .appId)
+AKS_ENGINE_CLIENT_SECRET=$(cat ${AZURE_AUTH_LOCATION} | jq -r .password)
 
 # deploy aks-engine cluster
 if [ -d "${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster" ]; then
     rm -rf ${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster
 fi
-aks-engine deploy --subscription-id $E2E_SUBSCRIPTION_ID \
+aks-engine deploy \
+    --subscription-id $E2E_SUBSCRIPTION_ID \
     --resource-group $AKS_ENGINE_RG \
     --location westus2 \
     --dns-prefix ${AKS_ENGINE_NAME}-cluster \
     --api-model tests/aks-engine/kubernetes.json \
     --output-directory "${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster" \
+    --force-overwrite \
     --client-id $AKS_ENGINE_CLIENT_ID \
     --client-secret $AKS_ENGINE_CLIENT_SECRET \
     --set servicePrincipalProfile.clientId="${AKS_ENGINE_CLIENT_ID}" \
     --set servicePrincipalProfile.secret="${AKS_ENGINE_CLIENT_SECRET}"
 
-export KUBECONFIG="${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster/kubeconfig/kubeconfig.westus2.json"
+KUBECONFIG="${PWD}/tests/aks-engine/_output/${AKS_ENGINE_NAME}-cluster/kubeconfig/kubeconfig.westus2.json"
 
 # create MSI
-az identity create -g $AKS_ENGINE_RG -n ${AKS_ENGINE_NAME}-identity -o json > $AZURE_IDENTITY_LOCATION
+az identity create -g $AKS_ENGINE_RG -n ${AKS_ENGINE_NAME}-identity --subscription $E2E_SUBSCRIPTION_ID -o json > $AZURE_IDENTITY_LOCATION
 if [ $? -eq 0 ]; then
     echo "Created identity for resource group ${AKS_ENGINE_RG}, stored in ${AZURE_IDENTITY_LOCATION}"
 else
     echo "Creating identity for resource group ${AKS_ENGINE_RG} failed"
 fi
 
-export RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
-export CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
-export PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
+RESOURCE_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .id)
+CLIENT_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .clientId)
+PRINCIPAL_ID=$(cat ${AZURE_IDENTITY_LOCATION} | jq -r .principalId)
 
 # create roles
 az role assignment create --role "Managed Identity Operator" --assignee $PRINCIPAL_ID --scope $RESOURCE_ID 
@@ -67,7 +69,13 @@ kubectl apply -f https://raw.githubusercontent.com/Azure/aad-pod-identity/master
 cat tests/aks-engine/aadpodidentity-config.yaml | envsubst | kubectl apply -f -
 
 # deploy controller 
-export IMG="$DOCKERHUB_USER/node-label" # change to your dockerhub username
+IMG="$DOCKERHUB_USER/node-label" # change to your dockerhub username
 make docker-build docker-push
 make deploy
 kubectl apply -f config/samples/configmap.yaml
+
+# Run E2E tests
+go test ./tests/e2e/... -timeout 0 -v -run Test/TestARMTagToNodeLabel
+
+# Delete resources 
+az group delete -n $AKS_ENGINE_RG --subscription $E2E_SUBSCRIPTION_ID
