@@ -38,6 +38,8 @@ To run end-to-end tests:
 
 Create a cluster with the controller installed.
 
+Make sure `KUBECONFIG` is set to the path of the kubeconfig file for this test cluster.
+
 Set environment variables to work with service principal authentication, if not set up already.
 
 ```sh
@@ -45,12 +47,6 @@ export AZURE_SUBSCRIPTION_ID=
 export AZURE_TENANT_ID=
 export AZURE_CLIENT_ID=
 export AZURE_CLIENT_SECRET=
-```
-
-Set `KUBECONFIG_OUT` to the contents of your kubeconfig file. This was done to make testing with Github Actions simpler.
-
-```sh
-export KUBECONFIG_OUT=$(<$KUBECONFIG)
 ```
 
 Run `make e2e-test`.
